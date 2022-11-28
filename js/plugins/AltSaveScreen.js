@@ -5,8 +5,32 @@
 /*:
  * @target MZ
  * @plugindesc Alternative save/load screen layout.
- * @author Yoji Ojima
+ * @author cocoAutumn
  *
+ * @param maxSavefiles
+ * @text max save files
+ * @desc How many save files (including autosave) the player can have.
+ * @type number
+ * @default 50
+ * @min 1
+ * @max 1000
+ * 
+ * @param maxRows
+ * @text max rows
+ * @desc How many rows in one page to show save files.
+ * @type number
+ * @default 5
+ * @min 1
+ * @max 5
+ * 
+ * @param maxCols
+ * @text max columns
+ * @desc How many columns in one page to show save files.
+ * @type number
+ * @default 10
+ * @min 1
+ * @max 10
+ * 
  * @help AltSaveScreen.js
  *
  * This plugin changes the layout of the save/load screen.
@@ -15,24 +39,14 @@
  * It does not provide plugin commands.
  */
 
-/*:ja
- * @target MZ
- * @plugindesc セーブ／ロード画面のレイアウトを変更します。
- * @author Yoji Ojima
- *
- * @help AltSaveScreen.js
- *
- * このプラグインは、セーブ／ロード画面のレイアウトを変更します。
- * ファイル一覧を上側に、詳細を下側に配置します。
- *
- * プラグインコマンドはありません。
- */
-
 (() => {
+    const param  = PluginManager.parameters('AltSaveScreen');
+    DataManager.maxSavefiles = () => param.maxSavefiles;
+
     const _Scene_File_create = Scene_File.prototype.create;
     Scene_File.prototype.create = function() {
         _Scene_File_create.apply(this, arguments);
-        this._listWindow.height = this._listWindow.fittingHeight(3);
+        this._listWindow.height = this._listWindow.fittingHeight(param.maxRows);
         const x = 0;
         const y = this._listWindow.y + this._listWindow.height;
         const width = Graphics.boxWidth;
@@ -54,9 +68,7 @@
         return Graphics.boxWidth;
     };
 
-    Window_SavefileList.prototype.maxCols = function() {
-        return 4;
-    };
+    Window_SavefileList.prototype.maxCols = () => param.maxCols;
 
     Window_SavefileList.prototype.itemHeight = function() {
         return this.lineHeight() * 2 + 16;
@@ -115,12 +127,14 @@
         this.drawText(info.playtime, rect.x, playtimeY, rect.width, "right");
     };
 
-    Window_SavefileStatus.prototype.drawPartyfaces = function(faces, x, y) {
-        if (faces) {
-            for (let i = 0; i < faces.length; i++) {
-                const data = faces[i];
-                this.drawFace(data[0], data[1], x + i * 150, y);
-            }
-        }
+    Window_SavefileStatus.prototype.drawPartyfaces = function (faces, x, y) {
+        const w = ImageManager.faceWidth, h = ImageManager.faceHeight;
+        if (faces)
+            for (let i = 0; i < faces.length; i++)
+                this.contents.blt(
+                    ImageManager.loadFace(faces[i][0]),
+                    faces[i][1] % 4 * h, (faces[i][1] >>> 2) * h, w, h,
+                    x + i * 150 * 2, y - 144, w * 2, h * 2
+                );
     };
 })();
