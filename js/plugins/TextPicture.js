@@ -4,17 +4,14 @@
 
 /*:
  * @target MZ
- * @plugindesc Displays text as a picture.
+ * @plugindesc 将多行文本以图片化的形式显示
  * @author Yoji Ojima
  *
  * @help TextPicture.js
- *
- * This plugin provides a command to show text as a picture.
- *
- * Use it in the following procedure.
- *   1. Call the plugin command "Set Text Picture".
- *   2. Execute "Show Picture" without specifying an image.
- *
+ * 本插件提供一个指令将多行文本以图片化的形式显示，使用步骤：
+ * 1. 调用插件指令「Set Text Picture」。
+ * 2. 执行「显示图片」指令但不指定图片文件。
+ * 
  * @command set
  * @text Set Text Picture
  * @desc Sets text to display as a picture.
@@ -26,40 +23,10 @@
  * @desc Text to display as a picture.
  *       Control characters are allowed.
  */
-
-/*:ja
- * @target MZ
- * @plugindesc テキストをピクチャとして表示します。
- * @author Yoji Ojima
- *
- * @help TextPicture.js
- *
- * このプラグインは、テキストをピクチャとして表示するコマンドを提供します。
- *
- * 次の手順で使用してください。
- *   1. プラグインコマンド「テキストピクチャの設定」を呼び出します。
- *   2. 画像を指定せずに「ピクチャの表示」を実行します。
- *
- * @command set
- * @text テキストピクチャの設定
- * @desc ピクチャとして表示するテキストを設定します。
- *       この後、画像を指定せずに「ピクチャの表示」を実行してください。
- *
- * @arg text
- * @type multiline_string
- * @text テキスト
- * @desc ピクチャとして表示するテキストです。
- *       制御文字が使用可能です。
- */
-
 (() => {
     const pluginName = "TextPicture";
     let textPictureText = "";
-
-    PluginManager.registerCommand(pluginName, "set", args => {
-        textPictureText = String(args.text);
-    });
-
+    PluginManager.registerCommand(pluginName, "set", args => { textPictureText = String(args.text); });
     const _Game_Picture_show = Game_Picture.prototype.show;
     Game_Picture.prototype.show = function() {
         _Game_Picture_show.apply(this, arguments);
@@ -68,14 +35,12 @@
             this.mzkp_textChanged = true;
             textPictureText = "";
         }
-    };
-
+    }
     const _Sprite_Picture_destroy = Sprite_Picture.prototype.destroy;
     Sprite_Picture.prototype.destroy = function() {
         destroyTextPictureBitmap(this.bitmap);
         _Sprite_Picture_destroy.apply(this, arguments);
-    };
-
+    }
     const _Sprite_Picture_updateBitmap = Sprite_Picture.prototype.updateBitmap;
     Sprite_Picture.prototype.updateBitmap = function() {
         _Sprite_Picture_updateBitmap.apply(this, arguments);
@@ -89,11 +54,8 @@
                 this.bitmap = createTextPictureBitmap(text);
                 picture.mzkp_textChanged = false;
             }
-        } else {
-            this.mzkp_text = "";
-        }
-    };
-
+        } else this.mzkp_text = "";
+    }
     function createTextPictureBitmap(text) {
         const tempWindow = new Window_Base(new Rectangle());
         const size = tempWindow.textSizeEx(text);
@@ -107,10 +69,7 @@
         bitmap.mzkp_isTextPicture = true;
         return bitmap;
     }
-
     function destroyTextPictureBitmap(bitmap) {
-        if (bitmap && bitmap.mzkp_isTextPicture) {
-            bitmap.destroy();
-        }
+        if (bitmap && bitmap.mzkp_isTextPicture) bitmap.destroy();
     }
-})();
+})()
