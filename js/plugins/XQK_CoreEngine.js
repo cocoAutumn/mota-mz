@@ -7,7 +7,7 @@
  * 本插件提供了大量对RMMZ运行时的功能扩展以及对其一些默认行为的优化，
  * 使用时需要依赖官方插件PluginCommonBase.js和TextScriptBase.js。
  * 
- * 0. 道具和金钱上限修改：略，详见js代码中的注释。
+ * 0. 金钱、道具、战斗人员上限修改：略，详见js代码中的注释。
  * 
  * 1. 64*64素材支持：
  * 在「数据库-系统2」中将图块大小设为32*32后，运行时加载tileset将实际读取
@@ -36,9 +36,10 @@
  * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。
  */
 (() => {
-    // 0. 道具和金钱上限修改：取消注释以后自己看着改吧，不同道具上限可以不同
+    // 0. 金钱、道具、战斗人员上限修改：取消注释以后自己看着改吧，不同道具上限可以不同
     // Game_Party.prototype.maxGold = () => 99999999;
     // Game_Party.prototype.maxItems = (item) => 99;
+    Game_Party.prototype.maxBattleMembers = () => 8;
 
     // 1. 64*64素材支持
     Game_Map.prototype.tileWidth = () => 'tileSize' in $dataSystem ? $dataSystem.tileSize * 2 : 48;
