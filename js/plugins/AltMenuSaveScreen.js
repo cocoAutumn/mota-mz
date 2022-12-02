@@ -181,16 +181,16 @@
         const playtimeY = bottom - this.lineHeight();
         const w = ImageManager.faceWidth;
         this.drawText(info.title, rect.x + w, rect.y, rect.width - w);
-        this.drawPartyfaces(info.faces, rect.x, bottom - 144);
+        this.drawPartyfaces(info.faces, rect.x, bottom);
         this.drawText(info.playtime, rect.x, rect.y, rect.width, 'right');
     }
     Window_SavefileStatus.prototype.drawPartyfaces = function (faces, x, y) {
         const w = ImageManager.faceWidth, h = ImageManager.faceHeight;
-        if (faces) for (let i = 0; i < Math.min(faces.length, 4); i++)
+        if (Array.isArray(faces)) for (let i = 0; i < Math.min(faces.length, 4); i++)
             this.contents.blt(
                 ImageManager.loadFace(faces[i][0]),
                 faces[i][1] % 4 * h, (faces[i][1] >>> 2) * h, w, h,
-                x + i * 150 * 2, y - 144, w * 2, h * 2
+                x + i * 150 * 2, y - h * 2, w * 2, h * 2
             )
     }
 })()

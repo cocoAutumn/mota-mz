@@ -21,6 +21,16 @@
  * 在事件页中备注<door:某门>就可以调用公共事件来开门，
  * 开门的条件、成功效果（含扣除钥匙）、失败效果都定义在函数
  * Game_Party.prototype.openDoor中，可以小心修改这些内容或添加新的门。
+ * 
+ * 3. 魔塔的道具捡拾：
+ * 在事件页中备注<goods:[x,y,z]>就可以使用下面的脚本来捡起道具：
+ * $gameParty.getItem(
+ *     $dataMap.events[$gameMap._interpreter._eventId].meta.goods)
+ * 其中x为0、1、2分别表示道具类型是「物品、武器、防具」，
+ * y为正整数表示该x类型下的道具编号，z为捡到的数量（默认1个，但也可以是负数）。
+ * 例如<goods:[0,1,2]>就表示「类型为物品，编号1，捡到2个」即2把黄钥匙。
+ * 如果是宝石、血瓶等立即生效的道具，则应备注<goods:道具名>
+ * 然后在Game_Party.prototype.getItem函数中逐一判断和处理。
  */
 (() => {
     // 0. 取消上移效果，如果不想取消请将下一行注释掉即可
@@ -34,7 +44,7 @@
     Game_Actor.prototype.paramPlus = function (paramId) { // 装备的常数增减
         // let value = Game_Battler.prototype.paramPlus.call(this, paramId);
         let value = 0;
-        for (const item of this.equips()) if (item) value += item.params[paramId];
+        for (const item of this.equips()) if (item != null) value += item.params[paramId];
         return value;
     }
 
@@ -78,13 +88,16 @@
         }
     }
 
-    // 3. 魔塔战斗系统
-    Game_Party.prototype.calcBattleDamage = function (troop, x, y) {
-        if (typeof troop === 'string')
-            if (troop.startsWith('[') && troop.endsWith(']'))
-                troop = troop.substring(1, troop.length - 1).split(',')
-            else
-                troop = [troop];
-        troop = troop.map(id => $dataEnemies[id]);
+    // 3. 魔塔的道具捡拾
+    Game_Party.prototype.getItem = function (s) {
+        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未填写goods备注。');
+        if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') {
+            s = eval(s);
+            AudioManager.playSe({ name: 'Shop2', volume: 100, pitch: 100 }); // 声效可自行修改
+            $gameParty.gainItem(Window_ShopBuy.prototype.goodsToItem(s), s[2] ?? 1); // 默认获得1个
+        } else {
+            // TODO: 血瓶宝石等自定义效果
+        }
+        return $gameMap._interpreter.command123(['A', 0]); // 独立开关 A = ON
     }
 })()
