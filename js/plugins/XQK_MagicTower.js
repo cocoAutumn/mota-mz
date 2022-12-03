@@ -23,14 +23,21 @@
  * Game_Party.prototype.openDoor中，可以小心修改这些内容或添加新的门。
  * 
  * 3. 魔塔的道具捡拾：
- * 在事件页中备注<goods:[x,y,z]>就可以使用下面的脚本来捡起道具：
+ * 在事件页中备注<item:...>就可以使用下面的脚本来捡起道具：
  * $gameParty.getItem(
- *     $dataMap.events[$gameMap._interpreter._eventId].meta.goods)
+ *     $dataMap.events[$gameMap._interpreter._eventId].meta.item)
+ * 具体有三种写法：
+ * 3.1 <item:[x,y,z]>（装进背包）：
  * 其中x为0、1、2分别表示道具类型是「物品、武器、防具」，
  * y为正整数表示该x类型下的道具编号，z为捡到的数量（默认1个，但也可以是负数）。
- * 例如<goods:[0,1,2]>就表示「类型为物品，编号1，捡到2个」即2把黄钥匙。
- * 如果是宝石、血瓶等立即生效的道具，则应备注<goods:道具名>
- * 然后在Game_Party.prototype.getItem函数中逐一判断和处理。
+ * 例如<item:[0,1,2]>就表示「类型为物品，编号1，捡到2个」即2把黄钥匙。
+ * 3.2 <item:能力缩写[m,n]>（加能力的宝石）：
+ * 其中「能力缩写」可以为mhp,mmp,atk,def,mat,mdf,agi,luk之一，
+ * 表示增加哪项能力。m表示增加多少点（可以是负数），
+ * n表示加给「队伍中的」第几个角色（从0开始），逗号和n不填则全队都增加。
+ * 例如<item:atk[3,0]>表示「队长攻击力增加3点」，可能是红宝石吧。
+ * 3.3 <item:道具名>（血瓶等自定义效果）：
+ * 这种就要在Game_Party.prototype.getItem函数中逐一判断和处理了。
  */
 (() => {
     // 0. 取消上移效果，如果不想取消请将下一行注释掉即可
@@ -39,13 +46,19 @@
     // 1. 角色八项属性与职业和等级解绑，还有一个ParamBasePlus是下面两项相加
     Game_Actor.prototype.paramBase = function (paramId) { // 补药和事件的永久增减
         // return this.currentClass().params[paramId][this._level];
-        return this._paramPlus[paramId]; // 直接对该项赋值就可以实现「过场重置属性」
+        return this._paramPlus[paramId]; // 直接对该项赋值就可以实现「过场重置某项属性」
     }
     Game_Actor.prototype.paramPlus = function (paramId) { // 装备的常数增减
         // let value = Game_Battler.prototype.paramPlus.call(this, paramId);
         let value = 0;
         for (const item of this.equips()) if (item != null) value += item.params[paramId];
         return value;
+    }
+    Game_Actor.prototype.clearParamPlus = function () { // 开局/过场重置全部属性
+        // 可以判断 this._actorId、this._classId 等根据角色或职业来设置不同的初始属性
+        this._paramPlus = [1000, 0, 10, 10, 0, 0, 0, 0];
+        // 设置完最大生命和魔力之后，可能需要重新设置当前生命和魔力：
+        // this._hp = 1000; this._mp = 0;
     }
 
     /* 2. 魔塔的钥匙和门：
@@ -90,14 +103,24 @@
 
     // 3. 魔塔的道具捡拾
     Game_Party.prototype.getItem = function (s) {
-        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未填写goods备注。');
-        if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') {
-            s = eval(s);
-            AudioManager.playSe({ name: 'Shop2', volume: 100, pitch: 100 }); // 声效可自行修改
-            $gameParty.gainItem(Window_ShopBuy.prototype.goodsToItem(s), s[2] ?? 1); // 默认获得1个
-        } else {
-            // TODO: 血瓶宝石等自定义效果
+        const customEffects = { // 自定义效果，可以使用command212或213播放动画或气泡表情
+            "红血瓶": "this.members().forEach(e=>e.gainHp(200));$gameMap._interpreter.command212([-1,46]);",
+            "蓝血瓶": "this.members().forEach(e=>e.gainHp(500));$gameMap._interpreter.command212([-1,41]);"
         }
+        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未填写item备注。');
+        const paramId = ['mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].indexOf(s.substring(0, 3));
+        if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') { // 物品、武器、防具
+            s = eval(s);
+            // 可以像这样为物品、武器、防具演奏不同声效：
+            AudioManager.playSe({ name: 'Sound' + (s[0] + 1), volume: 100, pitch: 100 });
+            this.gainItem(Window_ShopBuy.prototype.goodsToItem(s), s[2] ?? 1); // 默认获得1个
+        } else if (paramId >= 0 && s.charAt(s.length - 1) === ']') { // 8种宝石
+            s = eval(s.substring(3));
+            const actors = s.length < 2 ? this.members() : [this.members()[s[1]]];
+            for (let actor of actors) actor.addParam(paramId, s[0]);
+            // 可以像这样根据paramId演奏不同声效：
+            AudioManager.playSe({ name: 'Up' + (paramId + 1), volume: 100, pitch: 100 });
+        } else eval(customEffects[s]); // 其他自定义效果，如血瓶
         return $gameMap._interpreter.command123(['A', 0]); // 独立开关 A = ON
     }
 })()
