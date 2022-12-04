@@ -10,7 +10,8 @@
  * 
  * 0. 取消「不以叹号开头的行走图」绘制时上移6px：
  * 这个功能对地牢画风俯视视角的魔塔来说弊大于利，因此予以取消
- * （灌木丛/流体的脚部半透明效果仍然保留）。
+ * （灌木丛/流体的脚部半透明效果仍然保留），且这种效果难道不应该通过
+ * 主动给素材加透明像素的横行来实现么。
  * 
  * 1. 角色八项属性与职业和等级解绑：
  * RPG Maker的默认行为是，双上限、双攻双防、敏捷幸运，这八项属性的基础值
@@ -38,6 +39,18 @@
  * 例如<item:atk[3,0]>表示「队长攻击力增加3点」，可能是红宝石吧。
  * 3.3 <item:道具名>（血瓶等自定义效果）：
  * 这种就要在Game_Party.prototype.getItem函数中逐一判断和处理了。
+ * 
+ * 4. 魔塔的战斗系统：
+ * 直接在「数据库-敌人」中编辑怪物属性即可，但要注意下面的规则：
+ * (1) 怪物生命 = 最大魔力 * 1000000 + 最大生命，最多10位
+ * (2) 怪物攻击 = 敏捷 * 1000000 + 魔攻 * 1000 + 攻击，最多9位
+ * (3) 怪物防御 = 幸运 * 1000000 + 魔防 * 1000 + 防御，最多9位
+ * (4) 掉落的金币和经验最多7位
+ * 如果需要更大的范围或更多位的精度，可以修改DataManager.getEnemyInfo函数
+ * （比如让它根据备注栏来增加10位以上的值，或者乘以一个10的若干次方）。
+ * 特殊属性可以在右上角的特性中添加「属性有效度」，但是那个只支持0-10的参数
+ * （精确到0.001），因此本样板绝大部分特殊属性的整数参数都写在右下角的备注栏，
+ * 备注栏也可以用来添加生命和攻防以外的新属性。
  */
 (() => {
     // 0. 取消上移效果，如果不想取消请将下一行注释掉即可
@@ -107,7 +120,7 @@
             "红血瓶": "this.members().forEach(e=>e.gainHp(200));$gameMap._interpreter.command212([-1,46]);",
             "蓝血瓶": "this.members().forEach(e=>e.gainHp(500));$gameMap._interpreter.command212([-1,41]);"
         }
-        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未填写item备注。');
+        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未正确填写item备注。');
         const paramId = ['mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].indexOf(s.substring(0, 3));
         if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') { // 物品、武器、防具
             s = eval(s);
@@ -122,5 +135,17 @@
             AudioManager.playSe({ name: 'Up' + (paramId + 1), volume: 100, pitch: 100 });
         } else eval(customEffects[s]); // 其他自定义效果，如血瓶
         return $gameMap._interpreter.command123(['A', 0]); // 独立开关 A = ON
+    }
+
+    // 4. 魔塔的战斗系统
+    DataManager.getEnemyInfo = function (id, x, y) {
+        let e = $dataEnemies[id], obj = {};
+        if (e == null) return null;
+        obj.hp = e.params[0] + e.params[1] * 1e6;
+        obj.atk = e.params[2] + e.params[4] * 1e3 + e.params[6] * 1e6;
+        obj.def = e.params[3] + e.params[5] * 1e3 + e.params[7] * 1e6;
+        obj.special = e.traits.filter(t => t.code === 11).map(t => t.dataId);
+        for (let k in e.meta) obj[k] = e.meta[k];
+        return obj;
     }
 })()

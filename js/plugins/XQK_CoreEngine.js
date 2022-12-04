@@ -18,11 +18,15 @@
  * 远景图（parallaxes）如果一定要在编辑器中预览则也需要类似的处理。
  * 
  * 2. 转义序列增强：
- * 现在你可以在转义序列的方括号中使用数字、字母、下划线了，如果以下划线开头，
+ * 现在你可以在转义序列的方括号中使用负整数、字母、下划线了，如果以下划线开头，
  * 则下划线之后的部分会被解释为字符串，比如\C[_RRGGBB]可以设置任意文字颜色，
- * \I[_xxx]可以根据xxx来绘制不属于IconSet.png的图标。
+ * \I[_xxx]可以根据xxx来绘制不属于IconSet.png的图标（需要自己写逻辑）。
  * 
- * 3. 增强「名字输入处理」指令：
+ * 3. 备注元数据增强：
+ * 现在如果一项备注<key:value>的value只由0-9组成（可以以一个负号开头），
+ * 则所得到的meta对象中，该value会直接解释为整数而不是字符串。
+ * 
+ * 4. 增强「名字输入处理」指令：
  * 你也许会注意到System.json中有一项locale，但是编辑器中无法修改。
  * 事实上修改它可以影响「名字输入处理」指令用到的几页字符。
  * 比如修改为'ru'可以使用一页俄文西里尔字母，
@@ -30,8 +34,8 @@
  * 本插件将两页假名中的最后十几个进行了优化（提供了中文数字等）并将那页
  * 全角英数改成了半角ASCII字符。
  * 
- * 4. 增强「数字输入处理」指令：
- * 现在您可以使用$gameMap._interpreter.command103([id,digits,min,max])
+ * 5. 增强「数字输入处理」指令：
+ * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max])
  * 来扩大输入范围了，此处digits（位数）可以大于8，而min和max表示每个字符的
  * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。
  */
@@ -47,27 +51,40 @@
 
     // 2. 转义序列增强，支持\C[_RRGGBB]变色和额外的IconSet图标
     Window_Base.prototype.obtainEscapeParam = function (textState) {
-        const regExp = /^\[\w+\]/; // 转义序列的方括号内支持数字、字母、下划线
+        const regExp = /^\[-?\w+\]/; // 转义序列的方括号内支持负整数、字母、下划线
         const arr = regExp.exec(textState.text.slice(textState.index));
         if (arr) {
             textState.index += arr[0].length;
             if (arr[0].startsWith('[_')) return arr[0].substring(2, arr[0].length - 1); // 下划线开头
             return parseInt(arr[0].slice(1));
-        } else {
+        } else
             return "";
-        }
     };
     Window_Base.prototype.processColorChange = function (colorIndex) { // \C[n]变色增强，支持RGB值
         if (typeof colorIndex === 'string') this.changeTextColor('#' + colorIndex);
         else this.changeTextColor(ColorManager.textColor(colorIndex));
     };
-    let drawIcon = Window_Base.prototype.drawIcon;
-    Window_Base.prototype.drawIcon = function (iconIndex, x, y) {
-        if (typeof iconIndex === 'number') return drawIcon.apply(this, arguments);
-        // TODO: 否则iconIndex为字符串，请自由发挥
+
+    // 3. 备注元数据增强，现在0-9（可以以一个负号开头）会直接解释为整数
+    DataManager.extractMetadata = function (data) {
+        const regExp = /<([^<>:]+)(:?)([^>]*)>/g;
+        data.meta = {};
+        for (; ;) {
+            const match = regExp.exec(data.note);
+            if (match)
+                if (match[2] === ":")
+                    if (match[3].match(/^-?\d+$/))
+                        data.meta[match[1]] = +match[3];
+                    else
+                        data.meta[match[1]] = match[3];
+                else
+                    data.meta[match[1]] = true;
+            else
+                break;
+        }
     };
 
-    // 3. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII
+    // 4. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII
     Window_NameInput.JAPAN1 = [
         "あ", "い", "う", "え", "お", "が", "ぎ", "ぐ", "げ", "ご",
         "か", "き", "く", "け", "こ", "ざ", "じ", "ず", "ぜ", "ぞ",
@@ -102,7 +119,7 @@
         'u', 'v', 'w', 'x', 'y', 'z', '|', ' ', 'かな', '決定'
     ];
 
-    // 4. 增强「数字输入处理」指令，支持任意可见ASCII字符
+    // 5. 增强「数字输入处理」指令，支持任意可见ASCII字符
     Game_Interpreter.prototype.setupNumInput = function (params) {
         $gameMessage.setNumberInput(...params); // 接收多余参数
     };
@@ -117,7 +134,7 @@
         this._max = Math.max($gameMessage._minCodePoint, $gameMessage._maxCodePoint);
         this._maxDigits = $gameMessage.numInputMaxDigits();
         this._number = $gameVariables.value($gameMessage.numInputVariableId()).toString()
-            .substring(0, this._maxDigits).padZero(this._maxDigits).split('').map(
+            .substring(0, this._maxDigits).padStart(this._maxDigits).split('').map(
                 c => c.codePointAt(0).clamp(this._min, this._max)
             );
         this.updatePlacement(); this.placeButtons(); this.createContents();
