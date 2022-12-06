@@ -31,7 +31,8 @@
  * @help AltMenuScreen.js
  * 本插件是两个官方插件合并以后的样子，没有插件指令。
  * 菜单界面的8个命令改为在最上方一字排开，下方则显示最多8个角色。
- * 存读档界面改为矩阵样式，并在最下面显示放大一倍的脸图（装备界面的脸图也是）。
+ * 存读档界面改为矩阵样式，并在最下面显示放大一倍的4个脸图
+ * （装备界面的脸图也是），另外游戏标题被替换成了地图名称（如果存在）。
  * 可以修改全局参数来调节矩阵的宽高以及档案最大个数。
  * 另外本插件还会将菜单的最后一个命令由「游戏结束」改为「读档」，
  * 但对应的文本仍需在「数据库-用语」中自行修改。
@@ -193,4 +194,10 @@
                 x + i * 150 * 2, y - h * 2, w * 2, h * 2
             )
     }
+    let makeSavefileInfo = DataManager.makeSavefileInfo;
+    DataManager.makeSavefileInfo = function () {
+        const info = makeSavefileInfo.call(this);
+        info.title = $gameMap.displayName() || $dataSystem.gameTitle;
+        return info;
+    };
 })()

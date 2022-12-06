@@ -16,6 +16,7 @@
  * （Steam可以免费下载RMVA的Lite版本），然后用imagemagick等工具
  * 将它们放大一倍后放进'img/tile64/'目录。
  * 远景图（parallaxes）如果一定要在编辑器中预览则也需要类似的处理。
+ * 行走图（characters）在编辑器中看上去会比图块大一倍，属于正常现象。
  * 
  * 2. 转义序列增强：
  * 现在你可以在转义序列的方括号中使用负整数、字母、下划线了，如果以下划线开头，
@@ -23,21 +24,27 @@
  * \I[_xxx]可以根据xxx来绘制不属于IconSet.png的图标（需要自己写逻辑）。
  * 
  * 3. 备注元数据增强：
- * 现在如果一项备注<key:value>的value只由0-9组成（可以以一个负号开头），
- * 则所得到的meta对象中，该value会直接解释为整数而不是字符串。
+ * 现在如果一项备注<key:value>的value是数字格式（整数或浮点数，允许指数记法），
+ * 则所得到的meta对象中，该value（不能有空格）会直接解释为数字而不是字符串。
  * 
  * 4. 增强「名字输入处理」指令：
  * 你也许会注意到System.json中有一项locale，但是编辑器中无法修改。
  * 事实上修改它可以影响「名字输入处理」指令用到的几页字符。
- * 比如修改为'ru'可以使用一页俄文西里尔字母，
- * 修改为'ja'可以使用两页假名和一页全角英数。
+ * 比如修改为'ru'会使用一页俄文西里尔字母，'ja'为两页假名和一页全角英数。
  * 本插件将两页假名中的最后十几个进行了优化（提供了中文数字等）并将那页
  * 全角英数改成了半角ASCII字符。
  * 
  * 5. 增强「数字输入处理」指令：
- * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max])
+ * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max]);
  * 来扩大输入范围了，此处digits（位数）可以大于8，而min和max表示每个字符的
- * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。
+ * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。例如
+ * $gameMap._interpreter.command103([1,10,'a','z']);
+ * 要求玩家输入一个长度为10的小写单词，保存在1号变量中。
+ * 
+ * 6. 提供「左上角临时提示」功能：
+ * 还记得每次切换地图时左上角一闪而过的地图名称吗？现在你可以用那个横幅显示
+ * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数);
+ * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
  */
 (() => {
     // 0. 金钱、道具、战斗人员上限修改：取消注释以后自己看着改吧，不同道具上限可以不同
@@ -65,7 +72,7 @@
         else this.changeTextColor(ColorManager.textColor(colorIndex));
     };
 
-    // 3. 备注元数据增强，现在0-9（可以以一个负号开头）会直接解释为整数
+    // 3. 备注元数据增强，现在冒号右侧可以识别整数或浮点数了，支持指数记法，但不能有空格
     DataManager.extractMetadata = function (data) {
         const regExp = /<([^<>:]+)(:?)([^>]*)>/g;
         data.meta = {};
@@ -73,7 +80,8 @@
             const match = regExp.exec(data.note);
             if (match)
                 if (match[2] === ":")
-                    if (match[3].match(/^-?\d+$/))
+                    // if (/^-?\d+$/.test(match[3])) // 这个只匹配整数
+                    if (match[3].indexOf(' ') < 0 && Number.isFinite(+match[3]))
                         data.meta[match[1]] = +match[3];
                     else
                         data.meta[match[1]] = match[3];
@@ -156,5 +164,29 @@
         if (this._min === 48 && this._max === 57)
             this._number = (+this._number).clamp(0, Number.MAX_SAFE_INTEGER);
         processOk.call(this);
+    };
+
+    // 5. 左上角临时提示，可以指定几秒后开始淡出，文字内容支持转义序列
+    Game_Message.prototype.drawTip = function (text, time = 2) {
+        if (typeof text === 'string' && SceneManager._scene instanceof Scene_Map) {
+            const w = SceneManager._scene._mapNameWindow;
+            w._showCount = time * 60;
+            w.refresh(w.convertEscapeCharacters(text));
+        }
+    };
+    Window_MapName.prototype.refresh = function (text) {
+        this.contents.clear();
+        if ((text ??= $gameMap.displayName()).trim().length > 0) {
+            const width = Math.max(this.textWidth(text), this.innerWidth / 3);
+            this.drawBackground(0, 0, width, this.lineHeight());
+            this.drawText(text, 0, 0, width, "center");
+        }
+    };
+    Scene_Map.prototype.mapNameWindowRect = function () {
+        const wx = 0;
+        const wy = 0;
+        const ww = Graphics.boxWidth * 3 / 4; // 宽度为UI区域3/4，最少绘制其1/3底色
+        const wh = this.calcWindowHeight(1, false);
+        return new Rectangle(wx, wy, ww, wh);
     };
 })()

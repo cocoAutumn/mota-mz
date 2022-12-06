@@ -5,8 +5,8 @@
  *
  * @help XQK_MagicTower.js
  * 本插件提供了魔塔样板工程的核心功能，
- * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js、
- * UniqueDataLoader.js以及我的另一个插件XQK_CoreEngine.js。
+ * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js
+ * 以及我的另一个插件XQK_CoreEngine.js。
  * 
  * 0. 取消「不以叹号开头的行走图」绘制时上移6px：
  * 这个功能对地牢画风俯视视角的魔塔来说弊大于利，因此予以取消
@@ -41,19 +41,23 @@
  * 这种就要在Game_Party.prototype.getItem函数中逐一判断和处理了。
  * 
  * 4. 魔塔的战斗系统：
- * 直接在「数据库-敌人」中编辑怪物属性即可，但要注意下面的规则：
+ * 4.1 怪物属性直接在「数据库-敌人」中编辑即可，但要注意下面的规则：
  * (1) 怪物生命 = 最大魔力 * 1000000 + 最大生命，最多10位
  * (2) 怪物攻击 = 敏捷 * 1000000 + 魔攻 * 1000 + 攻击，最多9位
  * (3) 怪物防御 = 幸运 * 1000000 + 魔防 * 1000 + 防御，最多9位
- * (4) 掉落的金币和经验最多7位
- * 如果需要更大的范围或更多位的精度，可以修改DataManager.getEnemyInfo函数
- * （比如让它根据备注栏来增加10位以上的值，或者乘以一个10的若干次方）。
- * 特殊属性可以在右上角的特性中添加「属性有效度」，但是那个只支持0-10的参数
- * （精确到0.001），因此本样板绝大部分特殊属性的整数参数都写在右下角的备注栏，
- * 备注栏也可以用来添加生命和攻防以外的新属性。
+ * (4) 掉落的金币和经验最多7位。需要更大范围或更高精度可以直接在备注栏写：
+ * <hp:hhh> <atk:aaa> <def:ddd> <gold:ggg> <exp:eee>
+ * 特殊属性可以在右上角的特性中添加「属性有效度」，但那个百分比数值没有用。
+ * 特殊属性的数值写在右下角的备注栏（比如连击数、吸反破净倍率），
+ * 备注栏也可以用来添加生命和攻防以外的新属性（比如攻击动画）。
+ * 4.2 伤害计算：
+ * 本样板支持计算「与一队怪物同时战斗」的伤害，算法类似H5魔塔样板的「支援」。
+ * 我方每回合会集火攻击敌群中第一个存活的怪物，并造成常数伤害。
+ * 该怪物的生命除以该伤害（向上取整）就是它挨打的次数subturn。
+ * 在地图上放置怪物事件时，备注应填写<enemy:[x,y,...,z]>即敌人id数组。
  */
 (() => {
-    // 0. 取消上移效果，如果不想取消请将下一行注释掉即可
+    // 0. 取消「非叹号开头行走图」的上移效果，如果不想取消则将下一行注释掉即可
     Game_CharacterBase.prototype.shiftY = () => 0;
 
     // 1. 角色八项属性与职业和等级解绑，还有一个ParamBasePlus是下面两项相加
@@ -138,14 +142,53 @@
     }
 
     // 4. 魔塔的战斗系统
-    DataManager.getEnemyInfo = function (id, x, y) {
-        let e = $dataEnemies[id], obj = {};
+    DataManager.getEnemyInfo = function (id, x, y) { // 从数据库解析敌人属性
+        const e = $dataEnemies[id];
         if (e == null) return null;
-        obj.hp = e.params[0] + e.params[1] * 1e6;
-        obj.atk = e.params[2] + e.params[4] * 1e3 + e.params[6] * 1e6;
-        obj.def = e.params[3] + e.params[5] * 1e3 + e.params[7] * 1e6;
-        obj.special = e.traits.filter(t => t.code === 11).map(t => t.dataId);
+        const a = e.params;
+        let obj = {
+            'id': id, 'name': e.name, 'gold': e.gold, 'exp': e.exp,
+            'hp': a[0] + a[1] * 1e6,
+            'atk': a[2] + a[4] * 1e3 + a[6] * 1e6,
+            'def': a[3] + a[5] * 1e3 + a[7] * 1e6,
+            'special': e.traits.filter(t => t.code === 11).map(t => t.dataId),
+            'dropItems': e.dropItems.map(item => [item.kind, item.dataId, item.denominator])
+        };
         for (let k in e.meta) obj[k] = e.meta[k];
         return obj;
+    }
+    let _sum = function (func, from, to) {
+        if (to - from > 1e6)
+            return (func(from) + func(to)) * (to - from + 1) / 2; // 回合数过多，直接高斯求和？
+        let sum = 0;
+        for (let i = from; i <= to; ++i) sum += func(i);
+        return sum;
+    }
+    Game_Party.prototype.getDamageInfo = function (e, x, y) { // 战斗伤害计算，e为敌人id数组
+        if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
+            e = eval(e);
+        e = (Array.isArray(e) ? e : [e]).filter(id => $dataEnemies[id] != null)
+            .map(id => DataManager.getEnemyInfo(id, x, y))
+        //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
+        let damage = 0, turn = 0, subturn;
+        // 这里可以为damage增加初始值，比如吸血、先攻、破甲、净化
+        for (let i = 0; i < e.length; ++i) {
+            if (e[i].hp <= 0) continue;
+            let per_damage = this.members().reduce((per, actor, index, members) => {
+                return per + Math.max(actor.atk - e[i].def, 0);
+            }, 0); // 我方造成的per_damage必须是常数，否则无法用除法计算回合数
+            if (per_damage <= 0) { // 我方被对方中任何一个防杀
+                damage = Infinity; break;
+            }
+            turn += subturn = Math.ceil(e[i].hp / per_damage);
+            damage += _sum(t => {
+                // 这个箭头函数是敌方每回合造成的伤害，t从1到turn-1求和
+                // 可以使用 subturn 实现反击之类「和该怪物挨打次数相关」的属性
+                // 不过为什么我方只有队长的防御力参与运算呢？
+                return e[i].atk - this.members()[0].def;
+            }, 1, turn - 1);
+            // if (damage >= this.members()[0]._hp) break; // 已经打不过了，要提前结束循环吗？
+        }
+        return { damage: damage, turn: turn };
     }
 })()
