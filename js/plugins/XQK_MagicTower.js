@@ -5,8 +5,8 @@
  *
  * @help XQK_MagicTower.js
  * 本插件提供了魔塔样板工程的核心功能，
- * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js
- * 以及我的另一个插件XQK_CoreEngine.js。
+ * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js、
+ * ExtraWindow.js以及我的另一个插件XQK_CoreEngine.js。
  * 
  * 0. 取消「不以叹号开头的行走图」绘制时上移6px：
  * 这个功能对地牢画风俯视视角的魔塔来说弊大于利，因此予以取消
@@ -55,6 +55,21 @@
  * 我方每回合会集火攻击敌群中第一个存活的怪物，并造成常数伤害。
  * 该怪物的生命除以该伤害（向上取整）就是它挨打的次数subturn。
  * 在地图上放置怪物事件时，备注应填写<enemy:[x,y,...,z]>即敌人id数组。
+ * 
+ * 5. 魔塔的状态栏和地图显伤：
+ * 状态栏需要启用官方插件ExtraWindow.js，在其中创建一个新的结构参数。
+ * 参数的Target Scene选择Scene_Map，填写左上角坐标和宽高，
+ * 行距建议不小于32以便于\I[]图标绘制，文本内容必须为
+ * \js<$gameParty.statusBar()>（这个语法依赖TextScriptBase.js）
+ * 该函数每秒会被调用60次因此进行了缓存，一般会和地图上的事件页同步刷新
+ * （即变量/开关/独立开关/道具数量/队伍人员变化时），如需手动刷新请使用
+ * $gameMap.requestRefresh();
+ * 该插件还支持自定义该窗口的字体大小和WindowSkin图片，但比较重要的参数是
+ * 最下面的Switch ID和Animation，前者表示「控制状态栏显隐」的开关编号，
+ * 后者表示显隐是否有伸缩动画效果。
+ * 地图显伤会显示在「怪物所在格子」的左下角，第一行为回合数，第二行为伤害。
+ * 伤害小于等于0时会显示为绿色但「不带负号！」（否则写不下6位）
+ * 地图显伤的自动刷新时机和状态栏相同。
  */
 (() => {
     // 0. 取消「非叹号开头行走图」的上移效果，如果不想取消则将下一行注释掉即可
@@ -190,5 +205,84 @@
             // if (damage >= this.members()[0]._hp) break; // 已经打不过了，要提前结束循环吗？
         }
         return { damage: damage, turn: turn };
+    }
+
+    // 5. 状态栏和地图显伤，前者需要用到官方插件ExtraWindow.js
+    let _big = function (n, long) { // 大数字格式化，long为true会保留5~8位有效数字，否则2~5位
+        if (!Number.isFinite(n)) return '???';
+        const a = long ? [9007e12, 1e12, 1e8] : [1e13, 1e9, 1e6];
+        let s = n < 0 ? '-' : '';
+        n = Math.abs(n);
+        if (n >= a[0]) s += Math.round(n / 1e12) + 'z';
+        else if (n >= a[1]) s += Math.round(n / 1e8) + 'e';
+        else if (n >= a[2]) s += Math.round(n / 1e4) + 'w';
+        else s += n;
+        return s;
+    }
+    Game_Map.prototype.requestRefresh = function () {
+        this._needsRefresh = true; delete $gameTemp.statusCache;
+    }
+    Game_Party.prototype.statusBar = function () {
+        let s = $gameTemp.statusCache;
+        if (s == null) {
+            s = '';
+            for (let a of this.members().slice(0, 3)) { // 显示前几个勇士的信息？
+                s += '\u3000\u3000' + a._name + '\n';
+                s += '生命 ' + _big(a._hp) + '/' + _big(a.mhp) + '\n';
+                s += '魔力 ' + _big(a._mp) + '/' + _big(a.mmp) + '\n';
+                for (let i = 2; i <= 7; ++i)
+                    s += TextManager.param(i) + ' ' + _big(a.paramBasePlus(i), true) + '\n';
+            }
+            s += '\\C[_FFD700]' + this.numItems($dataItems[1]).padZero(2) + '  ';
+            s += '\\C[_66CCFF]' + this.numItems($dataItems[2]).padZero(2) + '  ';
+            s += '\\C[_FF0000]' + this.numItems($dataItems[3]).padZero(2);
+            $gameTemp.statusCache = s;
+        }
+        if ($dataMap != null) s = $dataMap.displayName + '\n' + s;
+        return s;
+    }
+    let GErefresh = Game_Event.prototype.refresh;
+    Game_Event.prototype.refresh = function () {
+        GErefresh.apply(this, arguments);
+        let ev = $dataMap.events[this._eventId], e = ev.meta.enemy;
+        if ($dataEnemies[e] != null) e = [e];
+        if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
+            e = eval(e);
+        if (Array.isArray(e) && this._characterName && !this.isTransparent()) {
+            let info = $gameParty.getDamageInfo(e, ev._x, ev._y);
+            if (info.damage <= 0)
+                info.color = '#00FF00'; // 'green'太暗了
+            else if (info.damage >= $gameParty.members()[0]._hp)
+                info.color = 'red';
+            else
+                info.color = ['white', 'yellow', 'orange'][
+                    Math.floor(3 * info.damage / $gameParty.members()[0]._hp)
+                ];
+            this._damageInfo = info;
+        } else
+            delete this._damageInfo;
+    }
+    let SCupdate = Sprite_Character.prototype.update;
+    Sprite_Character.prototype.update = function () {
+        SCupdate.apply(this, arguments);
+        let ev = this._character, w = $gameMap.tileWidth(), h = $gameMap.tileHeight(), b;
+        if (this.visible && ev instanceof Game_Event && 'enemy' in $dataMap.events[ev._eventId].meta) {
+            if (this._damage == null) {
+                this._damage = new Sprite(b = new Bitmap(w, h));
+                b.fontSize = 19;
+                b.fontFace = 'Consolas';
+                b.outlineColor = '#000000';
+                this._damage.position.set(-w / 2, -h / 2);
+                this.addChild(this._damage);
+            } else
+                b = this._damage.bitmap;
+            b.clear();
+            if (ev._damageInfo != null) {
+                b.textColor = '#FFFFFF';
+                b.drawText(_big(ev._damageInfo.turn), 0, 0, null, b.fontSize);
+                b.textColor = ev._damageInfo.color;
+                b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, null, b.fontSize);
+            }
+        }
     }
 })()

@@ -196,7 +196,7 @@
     }
     let makeSavefileInfo = DataManager.makeSavefileInfo;
     DataManager.makeSavefileInfo = function () {
-        const info = makeSavefileInfo.call(this);
+        const info = makeSavefileInfo.apply(this, arguments);
         info.title = $gameMap.displayName() || $dataSystem.gameTitle;
         return info;
     };

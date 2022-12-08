@@ -7,6 +7,7 @@ var $plugins =
 {"name":"TextPicture","status":true,"description":"将多行文本以图片化的形式显示","parameters":{}},
 {"name":"PluginCommonBase","status":true,"description":"众多官方插件所依赖的基础插件","parameters":{}},
 {"name":"TextScriptBase","status":true,"description":"增强文本转义序列的官方插件，被很多其他插件依赖","parameters":{"TextList":"[]"}},
+{"name":"ExtraWindow","status":true,"description":"在指定场景（Scene）实时显示额外窗口的官方插件，魔塔状态栏必备","parameters":{"WindowList":"[\"{\\\"SceneName\\\":\\\"Scene_Map\\\",\\\"x\\\":\\\"960\\\",\\\"y\\\":\\\"0\\\",\\\"width\\\":\\\"312\\\",\\\"height\\\":\\\"952\\\",\\\"LineHeight\\\":\\\"32\\\",\\\"Text\\\":\\\"\\\\\\\\js<$gameParty.statusBar()>\\\",\\\"FontSize\\\":\\\"0\\\",\\\"WindowSkin\\\":\\\"\\\",\\\"SwitchId\\\":\\\"0\\\",\\\"ShowOpenAnimation\\\":\\\"true\\\"}\"]"}},
 {"name":"XQK_CoreEngine","status":true,"description":"一些不止可以用于魔塔的丰富扩展功能","parameters":{}},
 {"name":"XQK_MagicTower","status":true,"description":"魔塔样板核心","parameters":{}}
 ];

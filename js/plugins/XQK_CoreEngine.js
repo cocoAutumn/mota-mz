@@ -163,7 +163,7 @@
         this._number = String.fromCodePoint(...this._number);
         if (this._min === 48 && this._max === 57)
             this._number = (+this._number).clamp(0, Number.MAX_SAFE_INTEGER);
-        processOk.call(this);
+        processOk.apply(this, arguments);
     };
 
     // 5. 左上角临时提示，可以指定几秒后开始淡出，文字内容支持转义序列
