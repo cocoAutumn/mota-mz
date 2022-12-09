@@ -42,10 +42,10 @@
  * 
  * 4. 魔塔的战斗系统：
  * 4.1 怪物属性直接在「数据库-敌人」中编辑即可，但要注意下面的规则：
- * (1) 怪物生命 = 最大魔力 * 1000000 + 最大生命，最多10位
- * (2) 怪物攻击 = 敏捷 * 1000000 + 魔攻 * 1000 + 攻击，最多9位
- * (3) 怪物防御 = 幸运 * 1000000 + 魔防 * 1000 + 防御，最多9位
- * (4) 掉落的金币和经验最多7位。需要更大范围或更高精度可以直接在备注栏写：
+ * (1) 生命 = 最大魔力 * 1000000 + 最大生命，最多10位
+ * (2) 攻击 = 敏捷 * 1000000 + 魔攻 * 1000 + 攻击力，最多9位
+ * (3) 防御 = 幸运 * 1000000 + 魔防 * 1000 + 防御力，最多9位
+ * (4) 金经 = 最多7位。需要更大范围或更高精度可以直接在备注栏写：
  * <hp:hhh> <atk:aaa> <def:ddd> <gold:ggg> <exp:eee>
  * 特殊属性可以在右上角的特性中添加「属性有效度」，但那个百分比数值没有用。
  * 特殊属性的数值写在右下角的备注栏（比如连击数、吸反破净倍率），
@@ -161,23 +161,20 @@
         const e = $dataEnemies[id];
         if (e == null) return null;
         const a = e.params;
-        let obj = {
+        let o = {
             'id': id, 'name': e.name, 'gold': e.gold, 'exp': e.exp,
             'hp': a[0] + a[1] * 1e6,
             'atk': a[2] + a[4] * 1e3 + a[6] * 1e6,
-            'def': a[3] + a[5] * 1e3 + a[7] * 1e6,
-            'special': e.traits.filter(t => t.code === 11).map(t => t.dataId),
-            'dropItems': e.dropItems.map(item => [item.kind, item.dataId, item.denominator])
+            'def': a[3] + a[5] * 1e3 + a[7] * 1e6
         };
-        for (let k in e.meta) obj[k] = e.meta[k];
-        return obj;
+        o.special = e.traits.filter(t => t.code === 11).map(t => t.dataId);
+        o.specialWords = o.special.map(i => $dataSystem.elements[i]);
+        o.dropItems = e.dropItems.map(i => [i.kind, i.dataId, i.denominator]);
+        return Object.assign(o, e.meta); // 可以在备注栏覆盖血攻防等属性
     }
-    let _sum = function (func, from, to) {
-        if (to - from > 1e6)
-            return (func(from) + func(to)) * (to - from + 1) / 2; // 回合数过多，直接高斯求和？
-        let sum = 0;
-        for (let i = from; i <= to; ++i) sum += func(i);
-        return sum;
+    let _sum = function (func, from, to) { // 数列求和：回合数过多时直接用等差公式？
+        if (to - from > 1e6) return (func(from) + func(to)) * (to - from + 1) / 2;
+        let sum = 0; for (let i = from; i <= to; ++i) sum += func(i); return sum;
     }
     Game_Party.prototype.getDamageInfo = function (e, x, y) { // 战斗伤害计算，e为敌人id数组
         if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
@@ -185,26 +182,59 @@
         e = (Array.isArray(e) ? e : [e]).filter(id => $dataEnemies[id] != null)
             .map(id => DataManager.getEnemyInfo(id, x, y))
         //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
-        let damage = 0, turn = 0, subturn;
-        // 这里可以为damage增加初始值，比如吸血、先攻、破甲、净化
+        let initDamage = 0, damage = 0, turn = 0, turns = new Array(e.length),
+            hero_hp = this.members().reduce((acc, actor, index, members) => acc + actor._hp, 0),
+            hero_atk = this.members().reduce((acc, actor, index, members) => acc + actor.atk, 0),
+            hero_def = Math.min.apply(Math, this.members().map(actor => actor.def));
+        //  hero_hp /= this._actors.length; // 生命改为取平均值
+        //  hero_atk /= this._actors.length; // 攻击改为取平均值
+        //  我方生命和攻击默认取总和（用于吸血和反击），防御力默认取全队最小者（破甲取最大者）。
         for (let i = 0; i < e.length; ++i) {
-            if (e[i].hp <= 0) continue;
-            let per_damage = this.members().reduce((per, actor, index, members) => {
-                return per + Math.max(actor.atk - e[i].def, 0);
-            }, 0); // 我方造成的per_damage必须是常数，否则无法用除法计算回合数
-            if (per_damage <= 0) { // 我方被对方中任何一个防杀
-                damage = Infinity; break;
+            let s = e[i].special; // 该怪物的全部特殊属性
+            if (s.includes(7)) // 破甲
+                initDamage += (e[i]['破甲'] ?? 1) * Math.max.apply(
+                    Math, this.members().map(actor => actor.def)
+                );
+            if (s.includes(11)) { // 吸血
+                let vampire = hero_hp * (e[i]['吸血'] ?? 0.25);
+                if (e[i]['add']) e[i].hp += vampire; // 吸走的血是否加到怪物自身
+                initDamage += vampire;
             }
-            turn += subturn = Math.ceil(e[i].hp / per_damage);
-            damage += _sum(t => {
-                // 这个箭头函数是敌方每回合造成的伤害，t从1到turn-1求和
-                // 可以使用 subturn 实现反击之类「和该怪物挨打次数相关」的属性
-                // 不过为什么我方只有队长的防御力参与运算呢？
-                return e[i].atk - this.members()[0].def;
-            }, 1, turn - 1);
-            // if (damage >= this.members()[0]._hp) break; // 已经打不过了，要提前结束循环吗？
+            if (s.includes(17)) { /* 仇恨 */ }
+            if (s.includes(22)) initDamage += e[i]['固伤'] ?? 0; // 固伤
+            /* 护盾减伤和净化应该在战后掉血时对不同角色分别处理？ */
+            if (e[i].hp <= 0) continue; // 生命不大于0的怪物直接跳过
+            if (s.includes(10)) // 模仿（仿攻）：默认取我方全队（含该怪物）攻击力最高者
+                e[i].atk = Math.max.apply(
+                    Math, this.members().map(actor => actor.atk).concat(e[i].atk)
+                );
+            let per_damage = this.members().reduce((acc, actor, index, members) => {
+                // per为我方单人每回合伤害
+                let per = Math.max(actor.atk - (s.includes(10) ? actor : e[i]).def, 0); // 模仿（仿防）
+                if (s.includes(3)) per = Math.min(per, 1); // 坚固：每人最多造成1点伤害
+                return acc + per;
+            }, 0); // 我方全队每回合伤害per_damage必须是常数，否则无法用除法计算回合数
+            // if (s.includes(20)) per_damage = 0; // 无敌，请务必用 && 追加其他条件
+            if (per_damage <= 0) { damage = Infinity; break; } // 我方被对方中任何一个防杀
+            turns[i] = Math.ceil(e[i].hp / per_damage); // 打死当前怪物所用回合数，用于反击
+            turn += turns[i]; // 打死之前怪物和当前怪物累计所用回合数
+            if (s.includes(8)) damage += turns[i] * hero_atk * (e[i]['反击'] ?? 0.1); // 反击
+            damage += _sum(t => { // 该怪物每回合造成的伤害，t从1（先攻除外）到(turn-1)求和
+                per = Math.max(e[i].atk - hero_def * (
+                    s.includes(2) ? e[i]['魔攻'] ?? 0 : 1 // 魔攻默认防御乘0，可改为乘其他值
+                ), 0);
+                if (s.includes(6)) per *= e[i]['连击'] ?? 2; // 连击默认2次，可改为其他值
+                return per;
+            }, s.includes(1) ? 1 - (e[i]['先攻'] ?? 1) : 1, turn - 1);
+            // 先攻次数支持任意整数，默认1次，负数表示前几回合不攻击
+            // if (damage >= hero_hp) break; // 已经打不过了，要提前结束循环吗？
         }
-        return { damage: damage, turn: turn };
+        return {
+            'troop': e.map(e => e.id),
+            'initDamage': initDamage, // 包含破甲、吸血、固伤
+            'damage': Math.round(initDamage + damage), // 包含先攻、反击
+            'turns': turns, 'turn': turn
+        };
     }
 
     // 5. 状态栏和地图显伤，前者需要用到官方插件ExtraWindow.js
@@ -244,6 +274,8 @@
     let GErefresh = Game_Event.prototype.refresh;
     Game_Event.prototype.refresh = function () {
         GErefresh.apply(this, arguments);
+        if (this.isTransparent() || !this._characterName)
+            return delete this._damageInfo;
         let ev = $dataMap.events[this._eventId], e = ev.meta.enemy;
         if ($dataEnemies[e] != null) e = [e];
         if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
