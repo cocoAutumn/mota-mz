@@ -75,10 +75,22 @@
  * 特殊属性的数值写在右下角的备注栏（比如连击数、吸反破净倍率），
  * 备注栏也可以用来添加生命和攻防以外的新属性（比如攻击动画）。
  * 4.2 伤害计算：
- * 本样板支持计算「与一队怪物同时战斗」的伤害，算法类似H5魔塔样板的「支援」。
- * 我方每回合会集火攻击敌群中第一个存活的怪物，并造成常数伤害。
- * 该怪物的生命除以该伤害（向上取整）就是它挨打的次数subturn。
+ * 本样板支持「多个勇士和多个怪物的 m VS n 战斗」，
+ * 我方每回合会集火敌群中第一个存活的怪物，造成常数伤害。
+ * 该怪物的生命除以此伤害（向上取整）就是打败它所用的回合数，
+ * 设打败前n个怪物所用的回合数之和为turn，则第n个怪物会在从1到(turn-1)
+ * 回合攻击我方（先攻属性则从0甚至负数），类似H5样板的支援属性。
+ * 全部怪物的伤害相加以后，会打给我方所有参战人员，并被他们各自的魔防减免，
+ * 因此实际各人员的损血会不一致，地图显伤也只显示魔防减免前的伤害。
+ * 我方的参战人员上限在XQK_CoreEngine.js中修改，改成1就是常见的单一勇士。
+ * 4.3 战斗触发器：
  * 在地图上放置怪物事件时，备注应填写<enemy:[x,y,...,z]>即敌人id数组。
+ * 如果需要打不过就取消战斗，则事件页必须只写一行「公共事件：_sys_battle」。
+ * 如果是重生怪，则不要有第二个事件页「出现条件：独立开关A，其他不改动」。
+ * 关于金经，金币是全队共用的，而经验是各角色自己的，经验可以触发自动进阶。
+ * 但是Game_Actor.prototype.expForLevel函数（每一级所需经验）
+ * 要自己复写（自带的那个四参数公式不会有人用吧？）
+ * 如果需要胖老鼠/新新魔塔那样的「第二货币」型经验，可以使用变量。
  *
  * 5. 魔塔的状态栏和地图显伤：
  * 状态栏需要启用官方插件ExtraWindow.js，在其中创建一个新的结构参数。
@@ -99,8 +111,8 @@
     const _args = PluginManager.parameters('XQK_MagicTower');
     _args.maxTurn = +_args.maxTurn; // 插件参数全是字符串，强转一下
     _args.vampire = +_args.vampire || 0.25; // 用 || 是为了覆盖 NaN
-    _args.breakArmor = +_args.breakArmor || 0.9;
     _args.spike = +_args.spike || 0.1;
+    _args.breakArmor = +_args.breakArmor || 0.9;
 
     // 1. 角色八项属性与职业和等级解绑，还有一个ParamBasePlus是下面两项相加
     Game_Actor.prototype.paramBase = function (paramId) { // 补药和事件的永久增减
@@ -153,6 +165,8 @@
                 "failure": "SoundManager.playSystemSound(3);$gameMessage.add('你没有'+$dataItems[3].name+'！');"
             }
         }
+        // const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id), x = ev._x, y = ev._y;
+        // 取消上一行的注释，就可以在被eval的脚本内部使用 id ev x y 这些变量！
         if (eval(doorInfos[door]?.condition)) {
             eval(doorInfos[door].success);
             return true;
@@ -168,7 +182,9 @@
             "红血瓶": "this.members().forEach(e=>e.gainHp(200));$gameMap._interpreter.command212([-1,46]);",
             "蓝血瓶": "this.members().forEach(e=>e.gainHp(500));$gameMap._interpreter.command212([-1,41]);"
         }
-        if (typeof s !== 'string') return $gameMessage.add('不存在的道具！可能是事件页未正确填写item备注。');
+        // const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id), x = ev._x, y = ev._y;
+        // 取消上一行的注释，就能在自定义效果中使用 id ev x y 这些变量！
+        if (typeof s !== 'string') return $gameMessage.add('不存在的道具' + s + '！可能是事件页未正确填写item备注。');
         const paramId = ['mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].indexOf(s.substring(0, 3));
         if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') { // 物品、武器、防具
             s = eval(s);
@@ -181,7 +197,8 @@
             for (let actor of actors) actor.addParam(paramId, s[0]);
             // 可以像这样根据paramId演奏不同声效：
             AudioManager.playSe({ name: 'Up' + (paramId + 1), volume: 100, pitch: 100 });
-        } else eval(customEffects[s]); // 其他自定义效果，如血瓶
+        } else if (s in customEffects) eval(customEffects[s]); // 其他自定义效果，如血瓶
+        else return $gameMessage.add('不存在的道具' + s + '！可能是插件中未自定义其效果。');
         return $gameMap._interpreter.command123(['A', 0]); // 独立开关 A = ON
     }
 
@@ -212,17 +229,21 @@
             .map(id => DataManager.getEnemyInfo(id, x, y))
         //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
         let initDamage = 0, damage = 0, turn = 0, turns = new Array(e.length),
-            hero_hp = this.members().reduce((acc, actor, index, members) => acc + actor._hp, 0),
-            hero_atk = this.members().reduce((acc, actor, index, members) => acc + actor.atk, 0),
-            hero_def = Math.min.apply(Math, this.members().map(actor => actor.def));
-        //  hero_hp /= this._actors.length; // 生命改为取平均值
-        //  hero_atk /= this._actors.length; // 攻击改为取平均值
-        //  我方生命和攻击默认取总和（用于吸血和反击），防御力默认取全队最小者（破甲取最大者）。
+            hero_hp = this.allBattleMembers().reduce(
+                (acc, actor, index, members) => acc + actor._hp, 0
+            ),
+            hero_atk = this.allBattleMembers().reduce(
+                (acc, actor, index, members) => acc + actor.atk, 0
+            ),
+            hero_def = Math.min.apply(Math, this.allBattleMembers().map(actor => actor.def));
+        //  hero_hp /= this.allBattleMembers().length; // 生命改为取平均值
+        //  hero_atk /= this.allBattleMembers().length; // 攻击改为取平均值
+        //  我方生命和攻击默认取参战人员总和（用于吸血和反击），防御力默认取最小者（破甲取最大者）。
         for (let i = 0; i < e.length; ++i) {
             let s = e[i].special; // 该怪物的全部特殊属性
             if (s.includes(7)) // 破甲
                 initDamage += (e[i]['破甲'] ?? _args.breakArmor) * Math.max.apply(
-                    Math, this.members().map(actor => actor.def)
+                    Math, this.allBattleMembers().map(actor => actor.def)
                 );
             if (s.includes(11)) { // 吸血
                 let vampire = hero_hp * (e[i]['吸血'] ?? _args.vampire);
@@ -232,12 +253,14 @@
             if (s.includes(17)) { /* 仇恨 */ }
             if (s.includes(22)) initDamage += e[i]['固伤'] ?? 0; // 固伤
             /* 护盾减伤和净化应该在战后掉血时对不同角色分别处理？ */
+
             if (e[i].hp <= 0) continue; // 生命不大于0的怪物直接跳过
-            if (s.includes(10)) // 模仿（仿攻）：默认取我方全队（含该怪物）攻击力最高者
+
+            if (s.includes(10)) // 模仿（仿攻）：默认取我方参战人员（含该怪物）攻击力最高者
                 e[i].atk = Math.max.apply(
-                    Math, this.members().map(actor => actor.atk).concat(e[i].atk)
+                    Math, this.allBattleMembers().map(actor => actor.atk).concat(e[i].atk)
                 );
-            let per_damage = this.members().reduce((acc, actor, index, members) => {
+            let per_damage = this.allBattleMembers().reduce((acc, actor, index, members) => {
                 // per为我方单人每回合伤害
                 let per = Math.max(actor.atk - (s.includes(10) ? actor : e[i]).def, 0); // 模仿（仿防）
                 if (s.includes(3)) per = Math.min(per, 1); // 坚固：每人最多造成1点伤害
@@ -250,20 +273,63 @@
             if (s.includes(8)) damage += turns[i] * hero_atk * (e[i]['反击'] ?? _args.spike); // 反击
             damage += _sum(t => { // 该怪物每回合造成的伤害，t从1（先攻除外）到(turn-1)求和
                 per = Math.max(e[i].atk - hero_def * (
-                    s.includes(2) ? e[i]['魔攻'] ?? 0 : 1 // 魔攻默认防御乘0，可改为乘其他值
+                    s.includes(2) ? e[i]['魔攻'] ?? 0 : 1 // 魔攻默认防御乘0，可改为乘其他值（小于0也行）
                 ), 0);
                 if (s.includes(6)) per *= e[i]['连击'] ?? 2; // 连击默认2次，可改为其他值
                 return per;
             }, s.includes(1) ? 1 - (e[i]['先攻'] ?? 1) : 1, turn - 1);
             // 先攻次数支持任意整数，默认1次，负数表示前几回合不攻击
-            // if (damage >= hero_hp) break; // 已经打不过了，要提前结束循环吗？
+            // if (initDamage + damage >= hero_hp) break; // 已经打不过了，要提前结束循环吗？
         }
         return {
-            'troop': e.map(e => e.id),
-            'initDamage': initDamage, // 包含破甲、吸血、固伤
-            'damage': Math.round(initDamage + damage), // 包含先攻、反击
+            'troop': e.map(enemy => enemy.id), // 敌人id数组
+            'special': e.flatMap(enemy => enemy.special), // 所有特殊属性连起来（包括重复）
+            'gold': e.reduce((sum, enemy) => sum + enemy.gold, 0), // 金币总和
+            'exp': e.reduce((sum, enemy) => sum + enemy.exp, 0), // 经验总和
+            'initDamage': Math.round(initDamage), // 包含破甲、吸血、固伤等，不可被护盾减伤
+            'damage': Math.round(initDamage + damage), // 在上一行的基础上还包含先攻、反击等
             'turns': turns, 'turn': turn
         };
+    }
+    let _purify = function (troop, x, y) { // 敌群的净化总倍率，因为要用两次所以定义为临时函数
+        return troop.reduce((acc, id, index, arr) => {
+            let e = DataManager.getEnemyInfo(id, x, y);
+            return acc + (e.special.includes(9) ? e['净化'] ?? 1 : 0);
+        }, 0);
+    }
+    Game_Party.prototype.beforeBattle = function (enemy) { // 返回true继续战斗，返回false取消战斗
+        const id = $gameMap._interpreter._eventId,
+            ev = $gameMap.event(id) ?? { 'list': () => [] }, l = ev.list();
+        try { ev._damageInfo = this.getDamageInfo(enemy, ev._x, ev._y); }
+        catch (e) { console.error(e); return false; } // 控制台调试时万一打错了不至于游戏闪退
+        if (l.length === 2 && l[0].code === 117 && l[1].code === 0) {
+            // 事件页只有一行【公共事件】时，才提前判定能否战胜，否则直接开打
+            let d = ev._damageInfo.initDamage, factor = 1 - _purify(ev._damageInfo.troop);
+            // 魔防系数 = 1 - 净化总倍率，参战人员用各自的魔防减伤，全部存活才算战胜
+            if (this.allBattleMembers().some((actor, index, members) =>
+                actor._hp <= d + Math.max(ev._damageInfo.damage - d - actor.mdf * factor, 0)
+            )) {
+                ev._damageInfo.color = 'red';
+                $gameMessage.add('你打不过此敌群' + enemy + '！');
+                return false;
+            }
+        }
+        return true;
+    }
+    Game_Party.prototype.afterBattle = function (enemy) {
+        const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id);
+        let info = ev._damageInfo, factor = 1 - _purify(info.troop);
+        for (let actor of this.allBattleMembers()) { // 参战人员依次掉血
+            actor._hp -= Math.max(
+                info.damage - info.initDamage - actor.mdf * factor, 0
+            ) + info.initDamage;
+            if (actor._hp <= 0) return SceneManager.goto(Scene_Gameover); // 战斗失败！
+        }
+        if (true) { // TODO: 诅咒
+            this.gainGold(info.gold); // 得到金币
+            // TODO: 经验
+        }
+        // TODO: 打击动画、毒衰咒退、自爆、仇恨
     }
 
     // 5. 状态栏和地图显伤，前者需要用到官方插件ExtraWindow.js
@@ -309,16 +375,14 @@
         if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
             e = eval(e);
         if (Array.isArray(e)) {
-            let info = $gameParty.getDamageInfo(e, ev._x, ev._y);
-            if (info.damage <= 0)
-                info.color = '#00FF00'; // 'green'太暗了
-            else if (info.damage >= $gameParty.members()[0]._hp)
-                info.color = 'red';
-            else
-                info.color = ['white', 'yellow', 'orange'][
-                    Math.floor(3 * info.damage / $gameParty.members()[0]._hp)
-                ];
-            this._damageInfo = info;
+            let o = $gameParty.getDamageInfo(e, ev._x, ev._y),
+                hp = Math.min.apply(
+                    Math, $gameParty.allBattleMembers().map(a => a._hp + a.mdf)
+                );
+            if (o.damage <= 0) o.color = '#00FF00'; // 'green'太暗了
+            else if (o.damage >= hp) o.color = 'red'; // 红色仅供参考，打不过不一定是红色
+            else o.color = ['white', 'yellow', 'orange'][Math.floor(3 * o.damage / hp)];
+            this._damageInfo = o;
         } else
             delete this._damageInfo;
     }
@@ -326,7 +390,7 @@
     Sprite_Character.prototype.update = function () {
         SCupdate.apply(this, arguments);
         let ev = this._character, w = $gameMap.tileWidth(), h = $gameMap.tileHeight(), b;
-        if (this.visible && ev instanceof Game_Event && 'enemy' in $dataMap.events[ev._eventId].meta) {
+        if (this.visible && ev instanceof Game_Event && ev._damageInfo != null) {
             if (this._damage == null) {
                 this._damage = new Sprite(b = new Bitmap(w, h));
                 b.fontSize = Math.ceil(h / 3);
@@ -337,12 +401,10 @@
             } else
                 b = this._damage.bitmap;
             b.clear();
-            if (ev._damageInfo != null) {
-                b.textColor = '#FFFFFF';
-                b.drawText(_big(ev._damageInfo.turn), 0, 0, w, b.fontSize);
-                b.textColor = ev._damageInfo.color;
-                b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, w, b.fontSize);
-            }
+            b.textColor = '#FFFFFF';
+            b.drawText(_big(ev._damageInfo.turn), 0, 0, w, b.fontSize);
+            b.textColor = ev._damageInfo.color;
+            b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, w, b.fontSize);
         }
     }
 })()

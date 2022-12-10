@@ -171,7 +171,7 @@
         const rect = this.itemLineRect(index); const align = "center"; this.resetTextColor();
         this.drawText(String.fromCodePoint(this._number[index]), rect.x, rect.y, rect.width, align);
     };
-    let processOk = Window_NumberInput.prototype.processOk;
+    var processOk = Window_NumberInput.prototype.processOk;
     Window_NumberInput.prototype.processOk = function () {
         this._number = String.fromCodePoint(...this._number);
         if (this._min === 48 && this._max === 57)
@@ -196,8 +196,7 @@
         }
     };
     Scene_Map.prototype.mapNameWindowRect = function () {
-        const wx = 0;
-        const wy = 0;
+        const wx = 0, wy = 0;
         const ww = Graphics.boxWidth * 3 / 4; // 宽度为UI区域3/4，最少绘制其1/3底色
         const wh = this.calcWindowHeight(1, false);
         return new Rectangle(wx, wy, ww, wh);
