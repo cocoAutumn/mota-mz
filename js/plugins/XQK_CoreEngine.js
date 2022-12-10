@@ -6,42 +6,50 @@
  * @help XQK_CoreEngine.js
  * 本插件提供了大量对RMMZ运行时的功能扩展以及对其一些默认行为的优化，
  * 使用时需要依赖官方插件PluginCommonBase.js和TextScriptBase.js。
- * 
+ *
  * 0. 金钱、道具、战斗人员上限修改：略，详见js代码中的注释。
- * 
- * 1. 64*64素材支持：
- * 在「数据库-系统2」中将图块大小设为32*32后，运行时加载tileset将实际读取
- * 'img/tile64/'目录下的文件，游戏效果每格为64*64。
+ *
+ * 1. 运行时2倍大小素材支持：
+ * 尽管RMMZ的1.6.1版在「数据库-系统2」中增加了一项「屏幕比例」（1~4的整数），
+ * 但那个会把UI框和文字等也同步放大，不但拥挤模糊而且逻辑分辨率还是原来那么小。
+ * 本插件会让运行时使用2倍的tileset，修改代码中' * 2 : 48;'的2来修改倍数。
+ * 以「数据库-系统2」中将图块大小设为32*32为例，运行时将使用64*64。
+ * 由于编辑器会强制以'img/tilesets/'目录的文件来预览，因此我们不得不在这放入
+ * 32*32的素材，并指定运行时从另一目录（如'img/tile2x/'）加载64*64的素材。
  * 推荐在'img/tilesets/'目录放置「RPG Maker VX和VX Ace」的tileset文件
- * （Steam可以免费下载RMVA的Lite版本），然后用imagemagick等工具
- * 将它们放大一倍后放进'img/tile64/'目录。
+ * （Steam可以免费下载RMVA的Lite版本），然后用imagemagick等工具将它们放大到
+ * 2倍后放进'img/tile2x/'目录。
  * 远景图（parallaxes）如果一定要在编辑器中预览则也需要类似的处理。
  * 行走图（characters）在编辑器中看上去会比图块大一倍，属于正常现象。
- * 
- * 2. 转义序列增强：
+ *
+ * 2. 不以叹号开头的character向上偏移量修改：
+ * 官方默认会把这种行走图向上偏移6px，这在不同的图块大小下可能是不合适的。
+ * 本插件将对应的函数复写了（默认不偏移），修改代码中' ? 0 : 0;'的第二个0即可。
+ *
+ * 3. 转义序列增强：
  * 现在你可以在转义序列的方括号中使用负整数、字母、下划线了，如果以下划线开头，
  * 则下划线之后的部分会被解释为字符串，比如\C[_RRGGBB]可以设置任意文字颜色，
  * \I[_xxx]可以根据xxx来绘制不属于IconSet.png的图标（需要自己写逻辑）。
- * 
- * 3. 备注元数据增强：
+ *
+ * 4. 备注元数据增强：
  * 现在如果一项备注<key:value>的value是数字格式（整数或浮点数，允许指数记法），
  * 则所得到的meta对象中，该value（不能有空格）会直接解释为数字而不是字符串。
- * 
- * 4. 增强「名字输入处理」指令：
+ *
+ * 5. 增强「名字输入处理」指令：
  * 你也许会注意到System.json中有一项locale，但是编辑器中无法修改。
  * 事实上修改它可以影响「名字输入处理」指令用到的几页字符。
  * 比如修改为'ru'会使用一页俄文西里尔字母，'ja'为两页假名和一页全角英数。
  * 本插件将两页假名中的最后十几个进行了优化（提供了中文数字等）并将那页
  * 全角英数改成了半角ASCII字符。
- * 
- * 5. 增强「数字输入处理」指令：
+ *
+ * 6. 增强「数字输入处理」指令：
  * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max]);
  * 来扩大输入范围了，此处digits（位数）可以大于8，而min和max表示每个字符的
  * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。例如
  * $gameMap._interpreter.command103([1,10,'a','z']);
  * 要求玩家输入一个长度为10的小写单词，保存在1号变量中。
- * 
- * 6. 提供「左上角临时提示」功能：
+ *
+ * 7. 提供「左上角临时提示」功能：
  * 还记得每次切换地图时左上角一闪而过的地图名称吗？现在你可以用那个横幅显示
  * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数);
  * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
@@ -54,9 +62,14 @@
 
     // 1. 64*64素材支持
     Game_Map.prototype.tileWidth = () => 'tileSize' in $dataSystem ? $dataSystem.tileSize * 2 : 48;
-    ImageManager.loadTileset = function (filename) { return this.loadBitmap('img/tile64/', filename) }
+    ImageManager.loadTileset = function (filename) { return this.loadBitmap('img/tile2x/', filename) }
 
-    // 2. 转义序列增强，支持\C[_RRGGBB]变色和额外的IconSet图标
+    // 2. 行走图向上偏移量
+    Game_CharacterBase.prototype.shiftY = function () {
+        return this.isObjectCharacter() ? 0 : 0; // 第二个0表示向上偏移量，官方默认为6，魔塔建议填0
+    };
+
+    // 3. 转义序列增强，支持\C[_RRGGBB]变色和额外的IconSet图标
     Window_Base.prototype.obtainEscapeParam = function (textState) {
         const regExp = /^\[-?\w+\]/; // 转义序列的方括号内支持负整数、字母、下划线
         const arr = regExp.exec(textState.text.slice(textState.index));
@@ -72,7 +85,7 @@
         else this.changeTextColor(ColorManager.textColor(colorIndex));
     };
 
-    // 3. 备注元数据增强，现在冒号右侧可以识别整数或浮点数了，支持指数记法，但不能有空格
+    // 4. 备注元数据增强，现在冒号右侧可以识别整数或浮点数了，支持指数记法，但不能有空格
     DataManager.extractMetadata = function (data) {
         const regExp = /<([^<>:]+)(:?)([^>]*)>/g;
         data.meta = {};
@@ -92,7 +105,7 @@
         }
     };
 
-    // 4. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII
+    // 5. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII
     Window_NameInput.JAPAN1 = [
         "あ", "い", "う", "え", "お", "が", "ぎ", "ぐ", "げ", "ご",
         "か", "き", "く", "け", "こ", "ざ", "じ", "ず", "ぜ", "ぞ",
@@ -127,7 +140,7 @@
         'u', 'v', 'w', 'x', 'y', 'z', '|', ' ', 'かな', '決定'
     ];
 
-    // 5. 增强「数字输入处理」指令，支持任意可见ASCII字符
+    // 6. 增强「数字输入处理」指令，支持任意可见ASCII字符
     Game_Interpreter.prototype.setupNumInput = function (params) {
         $gameMessage.setNumberInput(...params); // 接收多余参数
     };
@@ -166,7 +179,7 @@
         processOk.apply(this, arguments);
     };
 
-    // 5. 左上角临时提示，可以指定几秒后开始淡出，文字内容支持转义序列
+    // 7. 左上角临时提示，可以指定几秒后开始淡出，文字内容支持转义序列
     Game_Message.prototype.drawTip = function (text, time = 2) {
         if (typeof text === 'string' && SceneManager._scene instanceof Scene_Map) {
             const w = SceneManager._scene._mapNameWindow;
