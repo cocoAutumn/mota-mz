@@ -66,17 +66,17 @@
     Window_MenuStatus.prototype.drawItemImage = function (index) {
         const actor = this.actor(index), rect = this.itemRectWithPadding(index);
         const w = ImageManager.faceWidth, h = ImageManager.faceHeight, lineHeight = this.lineHeight();
-        // this.changePaintOpacity(actor.isBattleMember());
+        this.changePaintOpacity(actor.isBattleMember());
         this.contents.blt(
             ImageManager.loadFace(actor.faceName()),
             actor.faceIndex() % 4 * w, (actor.faceIndex() >>> 2) * h, w, h,
             rect.x, rect.y + lineHeight * 2, w * 1.5, h * 1.5
-        ) // 不参战的候补角色RM默认显示半透明脸图，被我注释掉了，有需要的可以取消注释
-        // this.changePaintOpacity(true);
+        ) // 不参战的候补角色默认显示半透明脸图，不需要的作者可以注释掉这两个this.changePaintOpacity
+        this.changePaintOpacity(true);
     }
     Window_StatusBase.prototype.drawActorLevel = function (actor, x, y) {
         this.changeTextColor(ColorManager.systemColor());
-        this.drawText(TextManager.levelA, x, y, ImageManager.faceWidth / 2);
+        this.drawText(TextManager.level, x, y, ImageManager.faceWidth / 2);
         this.resetTextColor();
         this.drawText(actor.level, x + ImageManager.faceWidth, y, ImageManager.faceWidth / 2);
     }
@@ -187,7 +187,7 @@
     }
     Window_SavefileStatus.prototype.drawPartyfaces = function (faces, x, y) {
         const w = ImageManager.faceWidth, h = ImageManager.faceHeight;
-        if (Array.isArray(faces)) for (let i = 0; i < Math.min(faces.length, 4); i++)
+        if (Array.isArray(faces)) for (let i = 0; i < faces.length; i++)
             this.contents.blt(
                 ImageManager.loadFace(faces[i][0]),
                 faces[i][1] % 4 * h, (faces[i][1] >>> 2) * h, w, h,
@@ -199,5 +199,17 @@
         const info = makeSavefileInfo.apply(this, arguments);
         info.title = $gameMap.displayName() || $dataSystem.gameTitle;
         return info;
+    };
+    Game_Party.prototype.charactersForSavefile = function() {
+        return this.allMembers().map(actor => [
+            actor.characterName(),
+            actor.characterIndex()
+        ]).slice(0, 4);
+    };    
+    Game_Party.prototype.facesForSavefile = function() {
+        return this.allMembers().map(actor => [
+            actor.faceName(),
+            actor.faceIndex()
+        ]).slice(0, 4);
     };
 })()

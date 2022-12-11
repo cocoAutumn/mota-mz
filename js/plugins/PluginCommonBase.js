@@ -14,7 +14,7 @@
 
 /*:
  * @target MZ
- * @plugindesc Plugin Analysis Common Base
+ * @plugindesc 众多官方插件所依赖的基础插件
  * @author triacontane
  *
  * @help PluginCommonBase.js

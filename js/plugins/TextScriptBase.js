@@ -8,7 +8,7 @@
 
 /*:
  * @target MZ
- * @plugindesc Text Script Base Plugin
+ * @plugindesc 增强文本转义序列的官方插件，被很多其他插件依赖
  * @author triacontane
  * @base PluginCommonBase
  * @beforeThan PluginCommonBase

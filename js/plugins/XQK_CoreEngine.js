@@ -7,7 +7,7 @@
  * 本插件提供了大量对RMMZ运行时的功能扩展以及对其一些默认行为的优化，
  * 使用时需要依赖官方插件PluginCommonBase.js和TextScriptBase.js。
  *
- * 0. 金钱、道具、战斗人员上限修改：略，详见js代码中的注释。
+ * 0. 金钱、道具、战斗人员、跟随人员上限修改：略，详见js代码中的注释。
  *
  * 1. 运行时2倍大小素材支持：
  * 尽管RMMZ的1.6.1版在「数据库-系统2」中增加了一项「屏幕比例」（1~4的整数），
@@ -55,10 +55,19 @@
  * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
  */
 (() => {
-    // 0. 金钱、道具、战斗人员上限修改：取消注释以后自己看着改吧，不同道具上限可以不同
+    // 0. 金钱、道具、战斗人员、跟随人员上限修改：
+    // 不同道具上限可以不同，战斗人员和跟随人员上限可以不同
     // Game_Party.prototype.maxGold = () => 99999999;
     // Game_Party.prototype.maxItems = (item) => 99;
-    Game_Party.prototype.maxBattleMembers = () => 8;
+    Game_Party.prototype.maxBattleMembers = () => 2;
+    Game_Follower.prototype.actor = function () {
+        return $gameParty.allMembers()[this._memberIndex];
+    };
+    Game_Followers.prototype.setup = function () {
+        this._data = [];
+        for (let i = 1; i < 8; i++) // 8为跟随人员上限
+            this._data.push(new Game_Follower(i));
+    };
 
     // 1. 64*64素材支持
     Game_Map.prototype.tileWidth = () => 'tileSize' in $dataSystem ? $dataSystem.tileSize * 2 : 48;
@@ -132,7 +141,7 @@
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
         '~', '!', '@', '#', '$', '%', '^', '&', '(', ')',
         ':', ';', '<', '=', '>', '?', '[', ']', '{', '}',
-        '+', '-', '*', '/', 'A', 'B', 'C', 'D', 'E', 'F',
+        '+', '-', '×', '÷', 'A', 'B', 'C', 'D', 'E', 'F',
         'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
         'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
