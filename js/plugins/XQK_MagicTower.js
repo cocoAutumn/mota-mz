@@ -52,7 +52,7 @@
  * @text 默认反击系数
  * @desc 反击怪未指定系数时采用的默认值，每当它被攻击时生效
  * @default 0.1
- * 
+ *
  * @param purify
  * @text 默认净化倍率
  * @desc 净化怪未指定倍率时采用的默认值，1表示单纯无视魔防
@@ -65,7 +65,7 @@
  * @text 默认吸血系数
  * @desc 吸血怪未指定系数时采用的默认值，必须小于1
  * @default 0.25
- * 
+ *
  * @param poisonDamage
  * @text 中毒每回合伤害
  * @desc 队伍中毒时，参战人员每回合额外受到的伤害，不可被魔防抵挡
@@ -91,7 +91,7 @@
  * @default 1
  * @min 1
  * @max 9007000000000000
- * 
+ *
  * @param hatredDecay
  * @text 仇恨衰减系数
  * @desc 打败仇恨怪时，仇恨值乘以多少。清零请填0，不变请填1。
@@ -563,14 +563,12 @@
             if (this._damage == null) {
                 this._damage = new Sprite(b = new Bitmap(w, h));
                 b.fontSize = Math.ceil(h / 3);
-                b.fontFace = 'Consolas';
-                b.outlineColor = '#000000';
+                b.fontFace = 'Consolas'; b.outlineColor = 'black';
                 this._damage.position.set(-w / 2, -h * 2 / 3);
                 this.addChild(this._damage);
             } else
                 b = this._damage.bitmap;
-            b.clear();
-            b.textColor = '#FFFFFF';
+            b.clear(); b.textColor = 'white';
             b.drawText(_big(ev._damageInfo.turn), 0, 0, w, b.fontSize);
             b.textColor = ev._damageInfo.color;
             b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, w, b.fontSize);

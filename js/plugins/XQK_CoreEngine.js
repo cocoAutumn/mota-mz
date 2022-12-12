@@ -53,6 +53,9 @@
  * 还记得每次切换地图时左上角一闪而过的地图名称吗？现在你可以用那个横幅显示
  * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数);
  * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
+ *
+ * 8. 启动时加载所有地图：（重要）
+ * 对魔塔和很多类型的游戏都很有用，游戏中切换地图时直接取用启动时的加载结果。
  */
 (() => {
     // 0. 金钱、道具、战斗人员、跟随人员上限修改：
@@ -210,4 +213,27 @@
         const wh = this.calcWindowHeight(1, false);
         return new Rectangle(wx, wy, ww, wh);
     };
+
+    // 8. 启动时加载所有地图，以后切换地图时直接取用结果
+    let loadDatabase = DataManager.loadDatabase;
+    DataManager.loadDatabase = function () {
+        loadDatabase.apply(DataManager, arguments);
+        fetch('data/MapInfos.json').then(s => s.json()).then(a => {
+            window.$dataMaps = new Array(a.length);
+            $dataMaps[0] = { "id": 0, "name": "", "order": 0, "parentId": 0 };
+            for (const o of a)
+                o && fetch('data/Map' + o.id.padZero(3) + '.json')
+                    .then(s => s.json()).then(
+                        map => this.onLoad($dataMaps[o.id] = Object.assign(map, o))
+                    );
+        });
+    }
+    let isDatabaseLoaded = DataManager.isDatabaseLoaded;
+    DataManager.isDatabaseLoaded = function () {
+        return window.$dataMaps?.includes(/*undefined*/) === false &&
+            isDatabaseLoaded.apply(DataManager, arguments);
+    }
+    DataManager.loadMapData = function (mapId) {
+        mapId > 0 ? $dataMap = $dataMaps[mapId] : this.makeEmptyMap();
+    }
 })()
