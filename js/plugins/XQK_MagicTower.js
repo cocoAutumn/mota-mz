@@ -65,6 +65,14 @@
  * @text 默认吸血系数
  * @desc 吸血怪未指定系数时采用的默认值，必须小于1
  * @default 0.25
+ * 
+ * @param poisonDamage
+ * @text 中毒每回合伤害
+ * @desc 队伍中毒时，参战人员每回合额外受到的伤害，不可被魔防抵挡
+ * @type number
+ * @default 5
+ * @min 1
+ * @max 9007000000000000
  *
  * @param cursedGold
  * @text 诅咒金币系数
@@ -75,7 +83,20 @@
  * @text 诅咒经验系数
  * @desc 诅咒状态下角色战斗获得的经验会乘以它，0表示不获得经验
  * @default 0
+ *
+ * @param hatredAdd
+ * @text 仇恨增幅
+ * @desc 每打败「一只」怪物，增长多少仇恨值
+ * @type number
+ * @default 1
+ * @min 1
+ * @max 9007000000000000
  * 
+ * @param hatredDecay
+ * @text 仇恨衰减系数
+ * @desc 打败仇恨怪时，仇恨值乘以多少。清零请填0，不变请填1。
+ * @default 0.5
+ *
  * @param explosive
  * @text 自爆剩余生命
  * @desc 与自爆怪战斗后参战人员的最多剩余生命
@@ -88,11 +109,6 @@
  * 本插件提供了魔塔样板工程的核心功能，
  * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js、
  * ExtraWindow.js以及我的另一个插件XQK_CoreEngine.js。
- *
- * 0. 取消「不以叹号开头的行走图」绘制时上移6px：
- * 这个功能对地牢画风俯视视角的魔塔来说弊大于利，因此予以取消
- * （灌木丛/流体的脚部半透明效果仍然保留），且这种效果难道不应该通过
- * 主动给素材加透明像素的横行来实现么。
  *
  * 1. 角色属性系统（含衰弱）：
  * RPG Maker的默认行为是，双上限、双攻双防、敏捷幸运，这八项属性的基础值
@@ -123,15 +139,18 @@
  * 这种就要在Game_Party.prototype.getItem函数中逐一判断和处理了。
  *
  * 4. 魔塔的战斗系统：
- * 4.1 怪物属性直接在「数据库-敌人」中编辑即可，但要注意下面的规则：
+ * 4.1 怪物属性：
+ * 直接在「数据库-敌人」中编辑即可，但要注意下面的规则。
  * (1) 生命 = 最大魔力 * 1000000 + 最大生命，最多10位
  * (2) 攻击 = 敏捷 * 1000000 + 魔攻 * 1000 + 攻击力，最多9位
  * (3) 防御 = 幸运 * 1000000 + 魔防 * 1000 + 防御力，最多9位
- * (4) 金经 = 最多7位。需要更大范围或更高精度可以直接在备注栏写：
- * <hp:hhh> <atk:aaa> <def:ddd> <gold:ggg> <exp:eee>
+ * (4) 金经 = 最多7位。需要更大范围或更高精度可以直接在备注栏写数值：
+ * <hp:...> <atk:...> <def:...> <gold:...> <exp:...>
  * 特殊属性可以在右上角的特性中添加「属性有效度」，但那个百分比数值没有用。
  * 特殊属性的数值写在右下角的备注栏（比如连击数、吸反破净倍率），
- * 如果没有写的话大部分属性会有一个默认数值在插件参数里兜底，
+ * 如果没有写的话大部分属性会有一个默认数值在本窗口右侧的插件参数里兜底。
+ * 关于毒衰咒，衰弱是跟着角色走的，中毒和诅咒是跟着队伍走的，
+ * 中毒的效果是参战人员按回合掉血而不是按行走步数。
  * 另外备注栏也可以用来添加生命和攻防以外的新属性（比如攻击动画）。
  * 4.2 伤害计算：
  * 本样板支持「多个勇士和多个怪物的 m VS n 战斗」，
@@ -145,7 +164,7 @@
  * 4.3 战斗触发器：
  * 在地图上放置怪物事件时，备注应填写<enemy:[x,y,...,z]>即敌人id数组。
  * 如果需要打不过就取消战斗，则事件页必须只写一行「公共事件：_sys_battle」。
- * 含有重生怪的敌群全队都有重生效果，实现方式是RM的「暂时消除事件」指令。
+ * 重生怪在id数组长度为1时才有重生效果，实现方式是RM的「暂时消除事件」指令。
  * 关于金经，金币是全队共用的，而经验是各角色自己的，经验可以触发自动进阶。
  * 但是Game_Actor.prototype.expForLevel函数（每一级所需经验）
  * 要自己复写（自带的那个四参数公式不会有人用吧？）
@@ -158,9 +177,9 @@
  * \js<$gameParty.statusBar()>（这个语法依赖TextScriptBase.js）
  * 该函数每秒会被调用60次因此进行了缓存，一般会和地图上的事件页同步刷新
  * （即变量/开关/独立开关/道具数量/队伍人员变化时），如需手动刷新请使用
- * $gameMap.requestRefresh();
+ * $gameMap.requestRefresh();（温馨提示：测试游戏可以按F9调节开关和变量）
  * 该插件还支持自定义该窗口的字体大小和WindowSkin图片，但比较重要的参数是
- * 最下面的Switch ID和Animation，前者表示「控制状态栏显隐」的开关编号，
+ * 最下面的Switch ID和Animation，前者表示「是否显示状态栏」的开关（默认为1），
  * 后者表示显隐是否有伸缩动画效果。
  * 地图显伤会显示在「怪物所在格子」的左下角，第一行为回合数，第二行为伤害。
  * 伤害小于等于0时会显示为绿色但「不带负号！」（否则写不下6位）
@@ -179,6 +198,7 @@
     _args.vampire ||= 0.25;
     _args.cursedGold ||= 0;
     _args.cursedExp ||= 0;
+    _args.hatredDecay ||= 0.5;
 
     // 1. 角色属性系统（含衰弱）
     Game_Actor.prototype.paramBase = function (paramId) { // 补药和事件的永久增减
@@ -204,6 +224,7 @@
         // 上一行是兜底值，可被「数据库-职业/角色」右下角备注中的<init:[...]>覆盖
         // 顺序是：[最大生命，最大魔力，攻击力，防御力，魔攻，魔防，敏捷，幸运]
         // 缩写为：[mhp，mmp，atk，def，mat，mdf，agi，luk]
+        // 在下面以及状态栏等处出现的 paramId 对应为 0~7
         if (this._actorId > 0) {
             if (this.currentClass().meta.init != null)
                 this._paramPlus = eval(this.currentClass().meta.init);
@@ -213,7 +234,7 @@
         // 游戏开局是满血满蓝，而中途则可能需要重新设置当前生命和魔力：
         // this._hp = 1000; this._mp = 0;
     };
-    // buff系统，衰弱会用到，5和-5为最大层数
+    // buff系统，衰弱会用到，5和-5为最大层数，不同 paramId 可以分别设置
     Game_Actor.prototype.paramBuffRate = function (paramId) {
         const b = this._buffs[paramId], r = 0.1, add = true;
         // r为每层的比例，add表示加法（true）还是乘法（false）叠加
@@ -292,7 +313,6 @@
             for (let actor of actors) actor.addParam(paramId, s[0]);
             // 可以像这样根据paramId演奏不同声效：
             AudioManager.playSe({ name: 'Up' + (paramId + 1), volume: 100, pitch: 100 });
-            // TODO: 左上角提示
         } else if (s in customEffects) eval(customEffects[s]); // 其他自定义效果，如血瓶
         else return $gameMessage.add('不存在的道具' + s + '！可能是插件中未自定义其效果。');
         return $gameMap._interpreter.command123(['A', 0]); // 独立开关 A = ON
@@ -311,7 +331,7 @@
         };
         o.special = e.traits.filter(t => t.code === 11).map(t => t.dataId);
         o.specialWords = o.special.map(i => $dataSystem.elements[i]);
-        o.dropItems = e.dropItems.map(i => [i.kind, i.dataId, i.denominator]);
+        // o.dropItems = e.dropItems.map(i => [i.kind, i.dataId, i.denominator]);
         return Object.assign(o, e.meta); // 可以在备注栏覆盖血攻防等属性
     }
     let _sum = function (func, from, to) { // 数列求和：回合数过多时直接用等差公式？
@@ -346,9 +366,9 @@
                 if (e[i]['add']) e[i].hp += vampire; // 吸走的血是否加到怪物自身
                 initDamage += vampire;
             }
-            if (s.includes(17)) { /* TODO: 仇恨 */ }
+            if (s.includes(17)) initDamage += $gameSystem._hatred ?? 0; // 仇恨
             if (s.includes(22)) initDamage += e[i]['固伤'] ?? 0;
-            /* 护盾减伤和净化应该在战后掉血时对不同角色分别处理？ */
+            /* 护盾减伤和净化在战后掉血时对不同角色分别处理 */
 
             if (e[i].hp <= 0) continue; // 生命不大于0的怪物直接跳过
 
@@ -382,12 +402,13 @@
             // 先攻次数支持任意整数，负数表示前几回合不攻击
             // if (initDamage + damage >= hero_hp) break; // 已经打不过了，要提前结束循环吗？
         }
+        if ($gameSystem._poisoned) initDamage += turn * _args.poisonDamage; // 中毒按回合掉血
         return {
             'troop': e.map(enemy => enemy.id), // 敌人id数组
             'special': e.flatMap(enemy => enemy.special), // 所有特殊属性连起来（包括重复）
             'gold': e.reduce((sum, enemy) => sum + enemy.gold, 0), // 金币总和
             'exp': e.reduce((sum, enemy) => sum + enemy.exp, 0), // 经验总和
-            'initDamage': Math.round(initDamage), // 包含破甲、吸血、固伤等，不可被护盾减伤
+            'initDamage': Math.round(initDamage), // 包含破甲、吸血、中毒、固伤等，不可被护盾减伤
             'damage': Math.round(initDamage + damage), // 在上一行的基础上还包含先攻、反击等
             'turns': turns, 'turn': turn
         };
@@ -421,7 +442,9 @@
             let d = ev._damageInfo.initDamage,
                 factor = 1 - _purify(ev._damageInfo.troop, ev._x, ev._y);
             if (this.allBattleMembers().some((actor, index, members) =>
-                actor._hp <= d + Math.max(ev._damageInfo.damage - d - actor.mdf * factor, 0)
+                actor._hp <= Math.max(
+                    ev._damageInfo.damage - d - actor.mdf * factor, 0
+                ) + d
             )) {
                 ev._damageInfo.color = 'red';
                 SoundManager.playSystemSound(3);
@@ -439,6 +462,12 @@
         if (o.special.includes(21)) degenerate = _degenerate(o.troop, ev._x, ev._y);
         animate = this.allMembers()[0].attackAnimationId1(); // 队长的武器动画
         $gameMap._interpreter.command212([id > 0 ? id : -1, animate]);
+
+        $gameSystem._hatred ??= 0; // 仇恨，默认按怪物数量而不是战斗场数增加
+        $gameSystem._hatred += o.troop.length * _args.hatredAdd;
+        if (o.special.includes(17)) $gameSystem._hatred *= _args.hatredDecay;
+
+        if (o.special.includes(12)) $gameSystem._poisoned = true; // 中毒
         if (o.special.includes(14)) $gameSystem._cursed = true; // 诅咒
         if ($gameSystem._cursed) { o.gold *= _args.cursedGold; o.exp *= _args.cursedExp; }
         for (let a of this.allBattleMembers()) { // 参战人员依次掉血，获得经验
@@ -447,7 +476,9 @@
             ) + o.initDamage;
             if (a._hp <= 0) return SceneManager.goto(Scene_Gameover); // 战斗失败！
             if (o.special.includes(19)) a._hp = Math.min(a._hp, _args.explosive); // 自爆
-            // TODO: 中毒、衰弱
+            if (o.special.includes(13)) { // 衰弱
+                a.decreaseBuff(2); a.decreaseBuff(3); // 2为攻击，3为防御，也可以衰弱其他属性
+            }
             if (o.special.includes(21)) // 退化
                 for (let i = 0; i < 8; ++i)
                     a._paramPlus[i] -= degenerate[i];
@@ -455,7 +486,7 @@
         }
         this.gainGold(o.gold); // 全队获得金币
         $gameMessage.drawTip('战斗胜利，获得' + o.gold + '\\G，' + o.exp + TextManager.expA);
-        $gameTemp._undead = o.special.includes(23); // 重生
+        $gameTemp._undead = o.special.includes(23) && o.troop.length === 1; // 重生
         // 可以在「公共事件：_sys_battle」中进行怪物消失前的自定义处理
     }
 
@@ -474,22 +505,31 @@
     Game_Map.prototype.requestRefresh = function () {
         this._needsRefresh = true; delete $gameTemp.statusCache;
     }
+    let SMgoto = SceneManager.goto;
+    SceneManager.goto = function (sceneClass) {
+        if (sceneClass === Scene_Map) delete $gameTemp.statusCache;
+        return SMgoto.call(SceneManager, sceneClass);
+    } // 关闭菜单栏回到地图时，清空状态栏缓存，因为可能进行了整队操作
     Game_Party.prototype.statusBar = function () {
-        let s = $gameTemp.statusCache;
+        let s = $gameTemp.statusCache; // 优先读取缓存（地图名称除外）
         if (s == null) {
             s = '';
             for (let a of this.allMembers().slice(0, 2)) { // 显示前几个勇士的信息？
                 s += '\u3000\u3000' + a._name + ' ' + a._level + TextManager.levelA + '\n';
                 s += TextManager.hpA + ' ' + _big(a._hp) + '/' + _big(a.mhp) + '\n';
                 s += TextManager.mpA + ' ' + _big(a._mp) + '/' + _big(a.mmp) + '\n';
-                for (let i = 2; i <= 7; ++i)
-                    s += TextManager.param(i) + ' ' + _big(a.paramBasePlus(i), true) + '\n';
+                for (let i = 2; i <= 7; ++i) { // 攻击 防御 魔攻 魔防 敏捷 幸运
+                    s += TextManager.param(i) + ' ';
+                    if (a.isDebuffAffected(i)) s += '\\C[_ffc0cb]'; // 衰弱
+                    s += _big(a.param(i), true);
+                    s += '\\C[0]\n';
+                }
                 s += TextManager.expA + ' ' + _big(a.currentExp()) + '\n';
             }
             s += '  \\C[_FFD700]' + this.numItems($dataItems[1]).padZero(2);
             s += '  \\C[_66CCFF]' + this.numItems($dataItems[2]).padZero(2);
             s += '  \\C[_FF0000]' + this.numItems($dataItems[3]).padZero(2);
-            s += '\\C[0]\n' + $dataSystem.currencyUnit + ' ' + this._gold;
+            s += '\\C[0]\n\\G ' + this._gold;
             $gameTemp.statusCache = s;
         }
         if ($dataMap != null) s = $dataMap.displayName + '\n' + s;
