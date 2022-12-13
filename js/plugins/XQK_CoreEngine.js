@@ -54,7 +54,7 @@
  * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数);
  * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
  *
- * 8. 启动时加载所有地图：（重要）
+ * 8. 启动时加载所有地图到$dataMapInfos：（重要）
  * 对魔塔和很多类型的游戏都很有用，游戏中切换地图时直接取用启动时的加载结果。
  */
 (() => {
@@ -214,26 +214,30 @@
         return new Rectangle(wx, wy, ww, wh);
     };
 
-    // 8. 启动时加载所有地图，以后切换地图时直接取用结果
+    // 8. 启动时加载所有地图到$dataMapInfos，以后切换地图时直接取用结果
     let loadDatabase = DataManager.loadDatabase;
     DataManager.loadDatabase = function () {
+        // 可以使用下一行这样的语法追加自己的json文件
+        // this._databaseFiles.unshift({ name: '$dataXxx', src: 'Xxx.json' });
+        this._databaseFiles.pop(); // 移除MapInfos.json，因为要另外fetch
         loadDatabase.apply(DataManager, arguments);
         fetch('data/MapInfos.json').then(s => s.json()).then(a => {
-            window.$dataMaps = new Array(a.length);
-            $dataMaps[0] = { "id": 0, "name": "", "order": 0, "parentId": 0 };
+            window.$dataMapInfos = new Array(a.length);
+            for (let i = a.length; --i >= 0; a[i] ?? // 删除地图会导致编号不连续
+                ($dataMapInfos[i] = { id: i, name: '', order: i, parentId: 0 }));
             for (const o of a)
-                o && fetch('data/Map' + o.id.padZero(3) + '.json')
-                    .then(s => s.json()).then(
-                        map => this.onLoad($dataMaps[o.id] = Object.assign(map, o))
-                    );
+                o && fetch('data/Map' + o.id.padZero(3) + '.json').then(s => s.json()).then(
+                    map => this.onLoad($dataMapInfos[o.id] = Object.assign(map, o))
+                );
         });
     }
     let isDatabaseLoaded = DataManager.isDatabaseLoaded;
     DataManager.isDatabaseLoaded = function () {
-        return window.$dataMaps?.includes(/*undefined*/) === false &&
+        return window.$dataMapInfos?.includes(/*undefined*/) === false &&
             isDatabaseLoaded.apply(DataManager, arguments);
     }
     DataManager.loadMapData = function (mapId) {
-        mapId > 0 ? $dataMap = $dataMaps[mapId] : this.makeEmptyMap();
+        mapId > 0 ? $dataMap = $dataMapInfos[mapId] : this.makeEmptyMap();
+        ($gameSystem._visited ??= {})[$dataMap.name] = true; // 已到达
     }
 })()

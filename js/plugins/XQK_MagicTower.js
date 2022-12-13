@@ -170,7 +170,7 @@
  * 要自己复写（自带的那个四参数公式不会有人用吧？）
  * 如果需要胖老鼠/新新魔塔那样的「第二货币」型经验，可以使用变量。
  *
- * 5. 魔塔的状态栏和地图显伤：
+ * 5. 状态栏和地图显伤：
  * 状态栏需要启用官方插件ExtraWindow.js，在其中创建一个新的结构参数。
  * 参数的Target Scene选择Scene_Map，填写左上角坐标和宽高，
  * 行距建议不小于32以便于\I[]图标绘制，文本内容必须为
@@ -184,6 +184,8 @@
  * 地图显伤会显示在「怪物所在格子」的左下角，第一行为回合数，第二行为伤害。
  * 伤害小于等于0时会显示为绿色但「不带负号！」（否则写不下6位）
  * 地图显伤的自动刷新时机和状态栏相同。
+ *
+ * 6. 楼层切换和传送器：
  */
 (() => {
     const _args = PluginManager.parameters('XQK_MagicTower');
@@ -199,6 +201,10 @@
     _args.cursedGold ||= 0;
     _args.cursedExp ||= 0;
     _args.hatredDecay ||= 0.5;
+
+    let _isArray = function (s) { // 为eval做准备
+        return Array.isArray(s) || typeof s === 'string' && s[0] === '[' && s.at(-1) === ']';
+    }
 
     // 1. 角色属性系统（含衰弱）
     Game_Actor.prototype.paramBase = function (paramId) { // 补药和事件的永久增减
@@ -226,10 +232,8 @@
         // 缩写为：[mhp，mmp，atk，def，mat，mdf，agi，luk]
         // 在下面以及状态栏等处出现的 paramId 对应为 0~7
         if (this._actorId > 0) {
-            if (this.currentClass().meta.init != null)
-                this._paramPlus = eval(this.currentClass().meta.init);
-            if (this.actor().meta.init != null)
-                this._paramPlus = eval(this.actor().meta.init);
+            let a = this.actor().meta.init ?? this.currentClass().meta.init;
+            if (_isArray(a)) this._paramPlus = eval(a);
         }
         // 游戏开局是满血满蓝，而中途则可能需要重新设置当前生命和魔力：
         // this._hp = 1000; this._mp = 0;
@@ -298,16 +302,16 @@
         }
         // const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id), x = ev._x, y = ev._y;
         // 取消上一行的注释，就能在自定义效果中使用 id ev x y 这些变量！
-        if (typeof s !== 'string') return $gameMessage.add('不存在的道具' + s + '！可能是事件页未正确填写item备注。');
-        const paramId = ['mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].indexOf(s.substring(0, 3));
-        if (s.charAt(0) === '[' && s.charAt(s.length - 1) === ']') { // 物品、武器、防具
+        if (!Array.isArray(s)) s = String(s);
+        const paramId = ['mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].indexOf(s.slice(0, 3));
+        if (_isArray(s)) { // 物品、武器、防具
             s = eval(s); s[2] ??= 1;
             // 可以像这样为物品、武器、防具演奏不同声效：
             AudioManager.playSe({ name: 'Sound' + (s[0] + 1), volume: 100, pitch: 100 });
             let item = Window_ShopBuy.prototype.goodsToItem(s);
             $gameMessage.drawTip('捡到' + item.name + (s[2] > 1 ? '×' + s[2] : ''));
             this.gainItem(item, s[2]); // 默认获得1个
-        } else if (paramId >= 0 && s.charAt(s.length - 1) === ']') { // 8种宝石
+        } else if (paramId >= 0 && s[3] === '[' && s.at(-1) === ']') { // 8种宝石
             s = eval(s.substring(3));
             const actors = s.length < 2 ? this.allMembers() : [this.allMembers()[s[1]]];
             for (let actor of actors) actor.addParam(paramId, s[0]);
@@ -339,8 +343,7 @@
         let sum = 0; for (let i = from; i <= to; ++i) sum += func(i); return sum;
     }
     Game_Party.prototype.getDamageInfo = function (e, x, y) { // 战斗伤害计算，e为敌人id数组
-        if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
-            e = eval(e);
+        if (_isArray(e)) e = eval(e);
         e = (Array.isArray(e) ? e : [e]).filter(id => $dataEnemies[id] != null)
             .map(id => DataManager.getEnemyInfo(id, x, y))
         //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
@@ -422,7 +425,7 @@
     let _degenerate = function (troop, x, y) { // 退化数组，虽然只需要用一次但还是定义为临时函数
         return troop.reduce((acc, id, index, arr) => {
             let e = DataManager.getEnemyInfo(id, x, y), a;
-            if (e.special.includes(21) && e['退化'] != null)
+            if (e.special.includes(21) && _isArray(e['退化']))
                 try {
                     a = eval(e['退化']); for (let i = 0; i < a.length; ++i) acc[i] += a[i];
                 } catch (ee) {
@@ -541,8 +544,7 @@
         if (this.isTransparent() || !this._characterName) return delete this._damageInfo;
         let ev = $dataMap.events[this._eventId], e = ev.meta.enemy;
         if ($dataEnemies[e] != null) e = [e];
-        if (typeof e === 'string' && e.charAt(0) === '[' && e.charAt(e.length - 1) === ']')
-            e = eval(e);
+        if (_isArray(e)) e = eval(e);
         if (Array.isArray(e)) {
             let o = $gameParty.getDamageInfo(e, ev._x, ev._y),
                 hp = Math.min.apply(
@@ -572,6 +574,38 @@
             b.drawText(_big(ev._damageInfo.turn), 0, 0, w, b.fontSize);
             b.textColor = ev._damageInfo.color;
             b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, w, b.fontSize);
+        }
+    }
+
+    // 6. 楼层切换和传送器
+    const _delimiter = ':'; // 地图名称定界符，要求长度为1且不是字母、数字、减号
+    if (_delimiter.length !== 1 || /^[-A-Za-z0-9]$/.test(_delimiter))
+        alert('地图名称定界符' + _delimiter + '不能为字母、数字、减号，且长度必须为1！');
+    Game_Player.prototype.changeFloor = function (stair, isFly) {
+        let i = stair.lastIndexOf('[');
+        if (i < 0 || stair.at(-1) !== ']') i = stair.length;
+        let a = eval(stair.substring(i)), name = $dataMap.name;
+        stair = stair.substring(0, i);
+        let toName = stair || $dataMap.name;
+        if (stair === '上' || stair === '下') { // 如果是这两个字则智能找层
+            if (!(name.endsWith(_delimiter + '0') ||
+                new RegExp(_delimiter + '-?[1-9]+[0-9]*$').test(name)))
+                return $gameMessage.add("智能上下楼要求地图的编辑器中名称以'"
+                    + _delimiter + "n'结尾，n可以是负数但不能有前导零！");
+            let i = name.lastIndexOf(_delimiter), n = name.substring(i + _delimiter.length);
+            n -= stair === '上' ? -1 : 1; // 用减法是为了把n强转为数字
+            toName = name.substring(0, i) + _delimiter + n;
+            stair = { '上': '下', '下': '上' }[stair];
+        }
+        let toMap = $dataMapInfos.find(map => map.name === toName) ?? $dataMap;
+        if (!Array.isArray(a) || a.length < 2) // 未指定目标点，则尝试从备注获取，获取失败则保持当前点
+            a = /^\[\d+,\d+\]$/.test(toMap.meta[stair]) ? eval(toMap.meta[stair]) : [this._x, this._y];
+        a.unshift(toMap.id);
+        if (($gameSystem._visited ?? {})[toName] || !isFly)
+            Game_Player.prototype.reserveTransfer.apply(this, a);
+        else {
+            SoundManager.playSystemSound(3);
+            $gameMessage.drawTip('你还未到过该楼层！');
         }
     }
 })()
