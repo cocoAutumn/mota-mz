@@ -223,8 +223,7 @@
         loadDatabase.apply(DataManager, arguments);
         fetch('data/MapInfos.json').then(s => s.json()).then(a => {
             window.$dataMapInfos = new Array(a.length);
-            for (let i = a.length; --i >= 0; a[i] ?? // 删除地图会导致编号不连续
-                ($dataMapInfos[i] = { id: i, name: '', order: i, parentId: 0 }));
+            for (let i = a.length; --i >= 0; a[i] ?? ($dataMapInfos[i] = null));
             for (const o of a)
                 o && fetch('data/Map' + o.id.padZero(3) + '.json').then(s => s.json()).then(
                     map => this.onLoad($dataMapInfos[o.id] = Object.assign(map, o))
@@ -238,6 +237,5 @@
     }
     DataManager.loadMapData = function (mapId) {
         mapId > 0 ? $dataMap = $dataMapInfos[mapId] : this.makeEmptyMap();
-        ($gameSystem._visited ??= {})[$dataMap.name] = true; // 已到达
     }
 })()

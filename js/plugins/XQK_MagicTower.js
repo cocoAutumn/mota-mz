@@ -137,6 +137,8 @@
  * 例如<item:atk[3,0]>表示「队长攻击力增加3点」，可能是红宝石吧。
  * 3.3 <item:道具名>（血瓶等自定义效果）：
  * 这种就要在Game_Party.prototype.getItem函数中逐一判断和处理了。
+ * 【注意】RM「轻按」不能用于可通行事件，若道具设为可通行（在人物下方），
+ * 则会先触发$gameParty.increaseSteps()再触发道具！
  *
  * 4. 魔塔的战斗系统：
  * 4.1 怪物属性：
@@ -169,6 +171,7 @@
  * 但是Game_Actor.prototype.expForLevel函数（每一级所需经验）
  * 要自己复写（自带的那个四参数公式不会有人用吧？）
  * 如果需要胖老鼠/新新魔塔那样的「第二货币」型经验，可以使用变量。
+ * 如需使怪物主动撞击主角时也触发战斗，请修改触发条件为「事件接触」。
  *
  * 5. 状态栏和地图显伤：
  * 状态栏需要启用官方插件ExtraWindow.js，在其中创建一个新的结构参数。
@@ -185,7 +188,29 @@
  * 伤害小于等于0时会显示为绿色但「不带负号！」（否则写不下6位）
  * 地图显伤的自动刷新时机和状态栏相同。
  *
- * 6. 楼层切换和传送器：
+ * 6. 魔塔的楼层切换：
+ * 在事件页中备注<stair:name[x,y,d,f]>就可以调用公共事件来切换楼层，
+ * 其中name为目标地图的「编辑器中名称」，左下角的列表中可以看到。
+ * 如果未填写name（即写作<stair:[x,y,d,f]>）则取当前楼层，如果name为单个汉字
+ * '上'或'下'则智能选择楼上或楼下，智能选层要求地图名称为「区域名：n」，
+ * n为不带前导零的层数（支持负数），这样就会自动选择同区域的n+1或n-1层，
+ * 不喜欢中文冒号可以在插件中改为其他定界符。x和y为传送到的坐标，d为传送后朝向
+ * （0不变，2468下左右上），f为淡出颜色（0黑屏，1白屏，其他无特效）。
+ * 如果未填写[x,y,d,f]，则分两种情况：
+ * (1) 如果是智能上下楼，则尝试取目标地图备注中的<上:[x,y]>或<下:[x,y]>点，
+ * 注意上楼会到达楼上的'下'楼点，下楼会到达楼下的'上'楼点（类似H5样板）。
+ * (2) 如果不是智能上下楼（填了完整name），或者备注中获取上下楼点失败，
+ * 则保持当前坐标（注意不是H5的搜索楼梯！），楼梯不可通行时要注意有4种可能。
+ * 【关于穿透性】尽量不要对任何「可通行事件」设置「仅确定键触发」，否则鼠标
+ * 和触屏没法停在上面而不触发！详情请查阅样板帮助文档。
+ *
+ * 7. spawn机制：
+ * 魔塔的特点之一是绝大部分事件需要量产，门、怪物、道具...甚至墙。
+ * 如果采用复制粘贴的方式，那么后续就难以统一修改行走图、优先级、触发条件等。
+ * 因此本样板提供了spawn机制，只要你在地图备注中填写<template:n>
+ * （n为某个样板层的地图编号），那么这张地图就会根据每个点的「区域ID」
+ * （左侧调色板的R页面，范围为0~255）自动从样板层复制相同ID的事件。
+ * 常用于制作「可破的墙」等大批量事件。
  */
 (() => {
     const _args = PluginManager.parameters('XQK_MagicTower');
@@ -349,10 +374,10 @@
         //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
         let initDamage = 0, damage = 0, turn = 0, turns = new Array(e.length),
             hero_hp = this.allBattleMembers().reduce(
-                (acc, actor, index, members) => acc + actor._hp, 0
+                (acc, actor) => acc + actor._hp, 0
             ),
             hero_atk = this.allBattleMembers().reduce(
-                (acc, actor, index, members) => acc + actor.atk, 0
+                (acc, actor) => acc + actor.atk, 0
             ),
             hero_def = Math.min.apply(Math, this.allBattleMembers().map(actor => actor.def));
         //  hero_hp /= this.allBattleMembers().length; // 生命改为取平均值
@@ -379,7 +404,7 @@
                 e[i].atk = Math.max.apply(
                     Math, this.allBattleMembers().map(actor => actor.atk).concat(e[i].atk)
                 );
-            let per_damage = this.allBattleMembers().reduce((acc, actor, index, members) => {
+            let per_damage = this.allBattleMembers().reduce((acc, actor) => {
                 // per为我方单人每回合伤害
                 let per = Math.max(actor.atk - (s.includes(10) ? actor : e[i]).def, 0); // 模仿（仿防）
                 if (s.includes(3)) per = Math.min(per, e[i]['坚固'] ?? _args.sturdy);
@@ -417,13 +442,13 @@
         };
     }
     let _purify = function (troop, x, y) { // 敌群的净化总倍率，因为要用两次所以定义为临时函数
-        return troop.reduce((acc, id, index, arr) => {
+        return troop.reduce((acc, id) => {
             let e = DataManager.getEnemyInfo(id, x, y);
             return acc + (e.special.includes(9) ? e['净化'] ?? _args.purify : 0);
         }, 0);
     }
     let _degenerate = function (troop, x, y) { // 退化数组，虽然只需要用一次但还是定义为临时函数
-        return troop.reduce((acc, id, index, arr) => {
+        return troop.reduce((acc, id) => {
             let e = DataManager.getEnemyInfo(id, x, y), a;
             if (e.special.includes(21) && _isArray(e['退化']))
                 try {
@@ -444,11 +469,9 @@
             // 魔防系数 = 1 - 净化总倍率，参战人员用各自的魔防减伤，全部存活才算战胜
             let d = ev._damageInfo.initDamage,
                 factor = 1 - _purify(ev._damageInfo.troop, ev._x, ev._y);
-            if (this.allBattleMembers().some((actor, index, members) =>
-                actor._hp <= Math.max(
-                    ev._damageInfo.damage - d - actor.mdf * factor, 0
-                ) + d
-            )) {
+            if (this.allBattleMembers().some(actor => actor._hp <= d + Math.max(
+                ev._damageInfo.damage - d - actor.mdf * factor, 0
+            ))) {
                 ev._damageInfo.color = 'red';
                 SoundManager.playSystemSound(3);
                 $gameMessage.drawTip('你打不过此怪物！');
@@ -578,34 +601,74 @@
     }
 
     // 6. 楼层切换和传送器
-    const _delimiter = ':'; // 地图名称定界符，要求长度为1且不是字母、数字、减号
+    const _delimiter = '：'; // 地图名称定界符，要求长度为1且不是字母、数字、减号
     if (_delimiter.length !== 1 || /^[-A-Za-z0-9]$/.test(_delimiter))
         alert('地图名称定界符' + _delimiter + '不能为字母、数字、减号，且长度必须为1！');
-    Game_Player.prototype.changeFloor = function (stair, isFly) {
+    Game_Player.prototype.changeFloor = function (stair, isFly) { // 返回true继续传送，否则取消传送
         let i = stair.lastIndexOf('[');
         if (i < 0 || stair.at(-1) !== ']') i = stair.length;
-        let a = eval(stair.substring(i)), name = $dataMap.name;
-        stair = stair.substring(0, i);
-        let toName = stair || $dataMap.name;
-        if (stair === '上' || stair === '下') { // 如果是这两个字则智能找层
+        let a = eval(stair.substring(i)), name = $dataMap.name,
+            toName = stair.substring(0, i) || $dataMap.name; // 只写了[x,y,d,f]则同层传送
+        if (toName === '上' || toName === '下') { // 如果是这两个字则智能找层，平面塔可能需要东西南北？
             if (!(name.endsWith(_delimiter + '0') ||
                 new RegExp(_delimiter + '-?[1-9]+[0-9]*$').test(name)))
                 return $gameMessage.add("智能上下楼要求地图的编辑器中名称以'"
                     + _delimiter + "n'结尾，n可以是负数但不能有前导零！");
-            let i = name.lastIndexOf(_delimiter), n = name.substring(i + _delimiter.length);
-            n -= stair === '上' ? -1 : 1; // 用减法是为了把n强转为数字
-            toName = name.substring(0, i) + _delimiter + n;
-            stair = { '上': '下', '下': '上' }[stair];
-        }
-        let toMap = $dataMapInfos.find(map => map.name === toName) ?? $dataMap;
+            let j = name.lastIndexOf(_delimiter), n = name.substring(j + _delimiter.length);
+            n -= toName === '上' ? -1 : 1; // 用减法是为了把n强转为数字
+            stair = { '上': '下', '下': '上' }[toName];
+            toName = name.substring(0, j) + _delimiter + n;
+        } else stair = null;
+        let toMap = $dataMapInfos.find(map => map?.name === toName); // 不检查唯一性，取索引最小的
+        if (toMap == null) return $gameMessage.add('找不到目标楼层！请检查层数范围或事件页备注是否匹配！');
         if (!Array.isArray(a) || a.length < 2) // 未指定目标点，则尝试从备注获取，获取失败则保持当前点
-            a = /^\[\d+,\d+\]$/.test(toMap.meta[stair]) ? eval(toMap.meta[stair]) : [this._x, this._y];
-        a.unshift(toMap.id);
-        if (($gameSystem._visited ?? {})[toName] || !isFly)
-            Game_Player.prototype.reserveTransfer.apply(this, a);
-        else {
-            SoundManager.playSystemSound(3);
-            $gameMessage.drawTip('你还未到过该楼层！');
+            a = stair != null && /^\[-?\d+,-?\d+\]$/.test(toMap.meta[stair]) ?
+                eval(toMap.meta[stair]) : [this._x, this._y];
+        // 习惯RMXP魔塔样板的作者也可以试试用1号和2号事件坐标...
+        $gameVariables.setValue(1, toMap.id);
+        $gameVariables.setValue(2, a[0]);
+        $gameVariables.setValue(3, a[1]); // 目标地图ID和坐标
+        if ([2, 4, 6, 8].includes(a[2])) this._newDirection = a[2]; // 传送后朝向，0不变，2468下左右上
+        if (a.length === 4) this._fadeType = a[3]; // 传送特效，0黑屏，1白屏，其他无淡出
+        // 可以在这里根据name、toName、isFly播放不同声效
+        return true;
+    }
+    // 复写事件指令，使用变量指定目标点时，朝向和淡入淡出的 0 用脚本覆盖
+    Game_Interpreter.prototype.command201 = function (params) {
+        if ($gameParty.inBattle() || $gameMessage.isBusy()) return false;
+        let mapId, x, y, d, f;
+        if (params[0] === 0) {
+            mapId = params[1]; x = params[2]; y = params[3]; d = params[4]; f = params[5];
+        } else {
+            mapId = $gameVariables.value(params[1]);
+            x = $gameVariables.value(params[2]);
+            y = $gameVariables.value(params[3]);
+            d = params[4] || $gamePlayer._newDirection;
+            f = params[5] || $gamePlayer._fadeType;
+        }
+        $gamePlayer.reserveTransfer(mapId, x, y, d, f);
+        this.setWaitMode("transfer");
+        return true;
+    }
+
+    // 7. spawn机制：根据各点的区域编码从样板层量产事件
+    let onDatabaseLoaded = Scene_Boot.prototype.onDatabaseLoaded;
+    Scene_Boot.prototype.onDatabaseLoaded = function () {
+        onDatabaseLoaded.apply(this, arguments);
+        for (const map of $dataMapInfos) {
+            if (map == null || $dataMapInfos[map.meta.template] == null) continue;
+            let src = $dataMapInfos[map.meta.template].events,
+                i = map.events.length, w = map.width, h = map.height;
+            for (let y = 0; y < h; ++y)
+                for (let x = 0; x < w; ++x) {
+                    let id = map.data[(5 * h + y) * w + x]; // 六等分的最后一段
+                    if (id > 0 && src[id] != null) {
+                        map.events[i] = Object.assign(
+                            JSON.parse(JSON.stringify(src[id])), { 'id': i, 'x': x, 'y': y }
+                        );
+                        ++i;
+                    }
+                }
         }
     }
 })()
