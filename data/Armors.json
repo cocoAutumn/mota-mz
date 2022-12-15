@@ -99,5 +99,7 @@ null,
 {"id":97,"atypeId":1,"description":"【装饰品】提升TP补充率的指环。","etypeId":5,"traits":[{"code":22,"dataId":1,"value":0},{"code":23,"dataId":5,"value":2}],"iconIndex":145,"name":"毅力指环","note":"","params":[0,0,0,0,0,0,0,0],"price":1000},
 {"id":98,"atypeId":1,"description":"【装饰品】降低MP消耗率的手镯。","etypeId":5,"traits":[{"code":22,"dataId":1,"value":0},{"code":23,"dataId":4,"value":0.5}],"iconIndex":144,"name":"MP守护者","note":"","params":[0,0,0,0,0,0,0,0],"price":1000},
 {"id":99,"atypeId":1,"description":"【装饰品】得到四大精灵的加持，受到火、水、风、土属性的\n伤害减半。","etypeId":5,"traits":[{"code":22,"dataId":1,"value":0},{"code":11,"dataId":2,"value":0.5},{"code":11,"dataId":5,"value":0.5},{"code":11,"dataId":6,"value":0.5},{"code":11,"dataId":7,"value":0.5}],"iconIndex":145,"name":"元素守护","note":"","params":[0,0,0,0,0,0,0,0],"price":1000},
-{"id":100,"atypeId":1,"description":"【装饰品】提升命中率的装饰品。","etypeId":5,"traits":[{"code":22,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0.5}],"iconIndex":151,"name":"护目镜","note":"","params":[0,0,0,0,0,0,0,0],"price":500}
+{"id":100,"atypeId":1,"description":"【装饰品】提升命中率的装饰品。","etypeId":5,"traits":[{"code":22,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0.5}],"iconIndex":151,"name":"护目镜","note":"","params":[0,0,0,0,0,0,0,0],"price":500},
+{"id":101,"atypeId":0,"description":"","etypeId":2,"traits":[{"code":22,"dataId":1,"value":0}],"iconIndex":0,"name":"","note":"","params":[0,0,0,0,0,0,0,0],"price":0},
+{"id":102,"atypeId":5,"description":"防具，可装备的防具类型由\n「角色、所属职业、身上所有装备」的「特性」共同决定。","etypeId":2,"traits":[],"iconIndex":128,"name":"铁盾","note":"","params":[0,0,0,10,0,0,0,0],"price":0}
 ]

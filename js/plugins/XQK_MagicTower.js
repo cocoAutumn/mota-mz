@@ -323,7 +323,8 @@
     Game_Party.prototype.getItem = function (s) {
         const customEffects = { // 自定义效果，可以使用command212或213播放动画或气泡表情
             "红血瓶": "this.allMembers().forEach(e=>e.gainHp(200));$gameMap._interpreter.command212([-1,46]);",
-            "蓝血瓶": "this.allMembers().forEach(e=>e.gainHp(500));$gameMap._interpreter.command212([-1,41]);"
+            "蓝血瓶": "this.allMembers().forEach(e=>e.gainHp(500));$gameMap._interpreter.command212([-1,41]);",
+            "钥匙盒": "this.gainItem($dataItems[1],1);this.gainItem($dataItems[2],1);this.gainItem($dataItems[3],1);AudioManager.playSe({name:'Shop2',volume:100,pitch:100});"
         }
         // const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id), x = ev._x, y = ev._y;
         // 取消上一行的注释，就能在自定义效果中使用 id ev x y 这些变量！

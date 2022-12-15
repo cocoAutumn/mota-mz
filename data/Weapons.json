@@ -48,6 +48,6 @@ null,
 {"id":46,"animationId":6,"description":"【匕首】用秘银锻造而成的短刀。","etypeId":1,"traits":[{"code":31,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0}],"iconIndex":96,"name":"秘银匕首","note":"","params":[0,0,18,0,0,0,0,0],"price":2930,"wtypeId":1},
 {"id":47,"animationId":6,"description":"【匕首】用龙之齿锻造而成的短刀。","etypeId":1,"traits":[{"code":31,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0}],"iconIndex":96,"name":"龙匕首","note":"","params":[0,0,23,0,0,0,0,0],"price":5820,"wtypeId":1},
 {"id":48,"animationId":0,"description":"","etypeId":1,"traits":[{"code":31,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0}],"iconIndex":0,"name":"","note":"","params":[0,0,0,0,0,0,0,0],"price":0,"wtypeId":0},
-{"id":49,"animationId":0,"description":"","etypeId":1,"traits":[{"code":31,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0}],"iconIndex":0,"name":"","note":"","params":[0,0,0,0,0,0,0,0],"price":0,"wtypeId":0},
+{"id":49,"animationId":2,"description":"武器可以改变勇士的战斗动画，可装备的武器类型由\n「角色、所属职业、身上所有装备」的「特性」共同决定。","etypeId":1,"traits":[],"iconIndex":97,"name":"铁剑","note":"","params":[0,0,10,0,0,0,0,0],"price":0,"wtypeId":2},
 {"id":50,"animationId":0,"description":"","etypeId":1,"traits":[{"code":31,"dataId":1,"value":0},{"code":22,"dataId":0,"value":0}],"iconIndex":0,"name":"","note":"","params":[0,0,0,0,0,0,0,0],"price":0,"wtypeId":0}
 ]
