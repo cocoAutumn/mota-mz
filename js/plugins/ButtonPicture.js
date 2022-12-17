@@ -1,16 +1,20 @@
 //=============================================================================
 // RPG Maker MZ - Button Picture
 //=============================================================================
+
 /*:
  * @target MZ
- * @plugindesc 点击图片触发公共事件
+ * @plugindesc Makes a picture clickable.
  * @author Yoji Ojima
  *
  * @help ButtonPicture.js
- * 本插件可以在显示图片以后为其绑定一个公共事件，点击时触发。
- * 使用步骤：
- * 1. 执行「显示图片」指令显示一张图片（比如说是个按钮形状）。
- * 2. 使用插件指令「Set Button Picture」为其绑定一个公共事件。
+ *
+ * This plugin provides a command to call a common event when a picture is
+ * clicked.
+ *
+ * Use it in the following procedure.
+ *   1. Execute "Show Picture" to display your button image.
+ *   2. Call the plugin command "Set Button Picture".
  *
  * @command set
  * @text Set Button Picture
@@ -30,8 +34,43 @@
  * @text Common Event
  * @desc Common event to call when the picture is clicked.
  */
+
+/*:ja
+ * @target MZ
+ * @plugindesc ピクチャをクリック可能にします。
+ * @author Yoji Ojima
+ *
+ * @help ButtonPicture.js
+ *
+ * このプラグインは、ピクチャのクリック時にコモンイベントを呼び出すコマンドを
+ * 提供します。
+ *
+ * 次の手順で使用してください。
+ *   1. 「ピクチャの表示」を実行して、ボタン画像を表示します。
+ *   2. プラグインコマンド「ボタンピクチャの設定」を呼び出します。
+ *
+ * @command set
+ * @text ボタンピクチャの設定
+ * @desc 指定したピクチャをクリック可能にします。
+ *
+ * @arg pictureId
+ * @type number
+ * @min 1
+ * @max 100
+ * @default 1
+ * @text ピクチャ番号
+ * @desc ピクチャの管理番号です。
+ *
+ * @arg commonEventId
+ * @type common_event
+ * @default 1
+ * @text コモンイベント
+ * @desc ピクチャがクリックされた時に呼び出すコモンイベントです。
+ */
+
 (() => {
     const pluginName = "ButtonPicture";
+
     PluginManager.registerCommand(pluginName, "set", args => {
         const pictureId = Number(args.pictureId);
         const commonEventId = Number(args.commonEventId);
@@ -39,17 +78,23 @@
         if (picture) {
             picture.mzkp_commonEventId = commonEventId;
         }
-    })
+    });
+
     Sprite_Picture.prototype.isClickEnabled = function() {
         const picture = this.picture();
         return picture && picture.mzkp_commonEventId && !$gameMessage.isBusy();
-    }
+    };
+
     Sprite_Picture.prototype.onClick = function() {
         $gameTemp.reserveCommonEvent(this.picture().mzkp_commonEventId);
-    }
+    };
+
     Spriteset_Base.prototype.mzkp_isAnyPicturePressed = function() {
-        return this._pictureContainer.children.some(sprite => sprite.isPressed());
-    }
+        return this._pictureContainer.children.some(sprite =>
+            sprite.isPressed()
+        );
+    };
+
     const _Scene_Map_isAnyButtonPressed =
         Scene_Map.prototype.isAnyButtonPressed;
     Scene_Map.prototype.isAnyButtonPressed = function() {
@@ -57,5 +102,5 @@
             _Scene_Map_isAnyButtonPressed.apply(this, arguments) ||
             this._spriteset.mzkp_isAnyPicturePressed()
         );
-    }
-})()
+    };
+})();

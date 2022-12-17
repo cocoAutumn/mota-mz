@@ -4,8 +4,8 @@
     "chromium-args": "--force-color-profile=srgb",
     "window": {
         "title": "RMMZ魔塔样板Ver0160",
-        "width": 1280,
-        "height": 960,
+        "width": 960,
+        "height": 720,
         "position": "center",
         "icon": "icon/icon.png"
     }

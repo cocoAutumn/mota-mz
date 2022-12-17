@@ -239,9 +239,7 @@
     Game_Actor.prototype.paramPlus = function (paramId) { // 装备的常数增减
         // let value = Game_Battler.prototype.paramPlus.call(this, paramId);
         let value = 0;
-        for (const item of this.equips())
-            if (item != null)
-                value += item.params[paramId];
+        for (const item of this.equips()) if (item != null) value += item.params[paramId];
         return value;
     };
     // 装备的百分比默认是乘法叠加（1.2*1.2=1.44），如需加法叠加（=1.4）请取消下面的注释
@@ -311,8 +309,7 @@
         // const id = $gameMap._interpreter._eventId, ev = $gameMap.event(id), x = ev._x, y = ev._y;
         // 取消上一行的注释，就可以在被eval的脚本内部使用 id ev x y 这些变量！
         if (eval(doorInfos[door]?.condition)) {
-            eval(doorInfos[door].success);
-            return true;
+            eval(doorInfos[door].success); return true;
         } else {
             eval(doorInfos[door]?.failure ?? "SoundManager.playSystemSound(3);$gameMessage.add('无法打开此门！');");
             return false; // 上一行中的字符串为「未找到对应的"某门"」时的失败效果
@@ -374,12 +371,8 @@
             .map(id => DataManager.getEnemyInfo(id, x, y))
         //  .filter(enemy => enemy.hp > 0); // 生命不大于0的怪物要忽略吗？
         let initDamage = 0, damage = 0, turn = 0, turns = new Array(e.length),
-            hero_hp = this.allBattleMembers().reduce(
-                (acc, actor) => acc + actor._hp, 0
-            ),
-            hero_atk = this.allBattleMembers().reduce(
-                (acc, actor) => acc + actor.atk, 0
-            ),
+            hero_hp = this.allBattleMembers().reduce((acc, actor) => acc + actor._hp, 0),
+            hero_atk = this.allBattleMembers().reduce((acc, actor) => acc + actor.atk, 0),
             hero_def = Math.min.apply(Math, this.allBattleMembers().map(actor => actor.def));
         //  hero_hp /= this.allBattleMembers().length; // 生命改为取平均值
         //  hero_atk /= this.allBattleMembers().length; // 攻击改为取平均值
@@ -399,7 +392,7 @@
             if (s.includes(22)) initDamage += e[i]['固伤'] ?? 0;
             /* 护盾减伤和净化在战后掉血时对不同角色分别处理 */
 
-            if (e[i].hp <= 0) continue; // 生命不大于0的怪物直接跳过
+            if (e[i].hp <= 0) { turns[i] = 0; continue; } // 生命不大于0的怪物直接跳过
 
             if (s.includes(10)) // 模仿（仿攻）：默认取我方参战人员（含该怪物）攻击力最高者
                 e[i].atk = Math.max.apply(
@@ -542,10 +535,10 @@
         if (s == null) {
             s = '';
             for (let a of this.allMembers().slice(0, 2)) { // 显示前几个勇士的信息？
-                s += '\u3000\u3000' + a._name + ' ' + a._level + TextManager.levelA + '\n';
+                s += '\u3000\u3000' + a._name + ' ' + TextManager.levelA + ' ' + a._level + '\n';
                 s += TextManager.hpA + ' ' + _big(a._hp) + '/' + _big(a.mhp) + '\n';
                 s += TextManager.mpA + ' ' + _big(a._mp) + '/' + _big(a.mmp) + '\n';
-                for (let i = 2; i <= 7; ++i) { // 攻击 防御 魔攻 魔防 敏捷 幸运
+                for (let i = 2; i <= 5; ++i) { // 攻击 防御 魔攻 魔防 [敏捷 幸运]
                     s += TextManager.param(i) + ' ';
                     if (a.isDebuffAffected(i)) s += '\\C[_ffc0cb]'; // 衰弱
                     s += _big(a.param(i), true);

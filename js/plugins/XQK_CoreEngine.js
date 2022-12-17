@@ -7,23 +7,10 @@
  * 本插件提供了大量对RMMZ运行时的功能扩展以及对其一些默认行为的优化，
  * 使用时需要依赖官方插件PluginCommonBase.js和TextScriptBase.js。
  *
- * 0. 金钱、道具、战斗人员、跟随人员上限修改：略，详见js代码中的注释。
- *
- * 1. 运行时2倍大小素材支持：
- * 尽管RMMZ的1.6.1版在「数据库-系统2」中增加了一项「屏幕比例」（1~4的整数），
- * 但那个会把UI框和文字等也同步放大，不但拥挤模糊而且逻辑分辨率还是原来那么小。
- * 本插件会让运行时使用2倍的tileset，修改代码中' * 2 : 48;'的2来修改倍数。
- * 以「数据库-系统2」中将图块大小设为32*32为例，运行时将使用64*64。
- * 由于编辑器会强制以'img/tilesets/'目录的文件来预览，因此我们不得不在这放入
- * 32*32的素材，并指定运行时从另一目录（如'img/tile2x/'）加载64*64的素材。
- * 推荐在'img/tilesets/'目录放置「RPG Maker VX和VX Ace」的tileset文件
- * （Steam可以免费下载RMVA的Lite版本），然后用imagemagick等工具将它们放大到
- * 2倍后放进'img/tile2x/'目录。
- * 远景图（parallaxes）如果一定要在编辑器中预览则也需要类似的处理。
- * 行走图（characters）在编辑器中看上去会比图块大一倍，属于正常现象。
+ * 1. 金钱、道具、战斗人员、跟随人员上限修改：略，详见js代码中的注释。
  *
  * 2. 不以叹号开头的character向上偏移量修改：
- * 官方默认会把这种行走图向上偏移6px，这在不同的图块大小下可能是不合适的。
+ * 官方默认会把这种行走图向上偏移6px，这对不需要营造高低差的场景可能是不合适的。
  * 本插件将对应的函数复写了（默认不偏移），修改代码中' ? 0 : 0;'的第二个0即可。
  *
  * 3. 转义序列增强：
@@ -58,25 +45,19 @@
  * 对魔塔和很多类型的游戏都很有用，游戏中切换地图时直接取用启动时的加载结果。
  */
 (() => {
-    // 0. 金钱、道具、战斗人员、跟随人员上限修改：
+    // 1. 金钱、道具、战斗人员、跟随人员上限修改：
     // 不同道具上限可以不同，战斗人员和跟随人员上限可以不同
     // Game_Party.prototype.maxGold = () => 99999999;
     // Game_Party.prototype.maxItems = (item) => 99;
     Game_Party.prototype.maxBattleMembers = () => 2;
-    Game_Follower.prototype.actor = function () {
-        return $gameParty.allMembers()[this._memberIndex];
-    };
+    Game_Follower.prototype.actor = function () { return $gameParty.allMembers()[this._memberIndex] }
     Game_Followers.prototype.setup = function () {
         this._data = [];
         for (let i = 1; i < 8; i++) // 8为跟随人员上限
             this._data.push(new Game_Follower(i));
     };
 
-    // 1. 64*64素材支持
-    Game_Map.prototype.tileWidth = () => 'tileSize' in $dataSystem ? $dataSystem.tileSize * 2 : 48;
-    ImageManager.loadTileset = function (filename) { return this.loadBitmap('img/tile2x/', filename) }
-
-    // 2. 行走图向上偏移量
+    // 2. 行走图向上偏移量修改
     Game_CharacterBase.prototype.shiftY = function () {
         return this.isObjectCharacter() ? 0 : 0; // 第二个0表示向上偏移量，官方默认为6，魔塔建议填0
     };
