@@ -173,9 +173,9 @@
  * 如果需要胖老鼠/新新魔塔那样的「第二货币」型经验，可以使用变量。
  * 如需使怪物主动撞击主角时也触发战斗，请修改触发条件为「事件接触」。
  *
- * 5. 状态栏和地图显伤：
- * 状态栏需要启用官方插件ExtraWindow.js，在其中创建一个新的结构参数。
- * 参数的Target Scene选择Scene_Map，填写左上角坐标和宽高，
+ * 5. 状态栏、怪物手册、地图显伤：
+ * 状态栏和怪物手册需要启用官方插件ExtraWindow.js，在其中创建两个新的结构参数。
+ * 状态栏的结构参数中Target Scene选择Scene_Map，填写左上角坐标和宽高，
  * 行距建议不小于32以便于\I[]图标绘制，文本内容必须为
  * \js<$gameParty.statusBar()>（这个语法依赖TextScriptBase.js）
  * 该函数每秒会被调用60次因此进行了缓存，一般会和地图上的事件页同步刷新
@@ -184,9 +184,12 @@
  * 该插件还支持自定义该窗口的字体大小和WindowSkin图片，但比较重要的参数是
  * 最下面的Switch ID和Animation，前者表示「是否显示状态栏」的开关（默认为1），
  * 后者表示显隐是否有伸缩动画效果。
- * 地图显伤会显示在「怪物所在格子」的左下角，第一行为回合数，第二行为伤害。
- * 伤害小于等于0时会显示为绿色但「不带负号！」（否则写不下6位）
- * 地图显伤的自动刷新时机和状态栏相同。
+ * 怪物手册和状态栏一样，只不过显示的场景是主菜单（Scene_Menu）且条件开关为2。
+ * 显示内容是\js<$gameParty.enemyBook()>，但是该内容中的\\I[_n]图标绘制
+ * 要求将一张EnemyBook.png放在img/system文件夹，此图片形似H5样板的
+ * terrains.png，也就是宽32的竖长条。
+ * 地图显伤在两个开关同时开启时，会显示在「怪物所在格子」的左下角，
+ * 第一行是回合数，第二行是伤害。负伤会显示为绿色但「不带负号！」（否则写不下6位）
  *
  * 6. 魔塔的楼层切换：
  * 在事件页中备注<stair:name[x,y,d,f]>就可以调用公共事件来切换楼层，
@@ -510,7 +513,7 @@
         // 可以在「公共事件：_sys_battle」中进行怪物消失前的自定义处理
     }
 
-    // 5. 状态栏和地图显伤，前者需要用到官方插件ExtraWindow.js
+    // 5. 状态栏、怪物手册、地图显伤，前两者需要用到官方插件ExtraWindow.js
     let _big = function (n, long) { // 大数字格式化，long为true会保留5~8位有效数字，否则2~5位
         if (!Number.isFinite(n)) return '???';
         const a = long ? [9007e12, 1e12, 1e8] : [1e13, 1e9, 1e6];
@@ -523,13 +526,19 @@
         return s;
     }
     Game_Map.prototype.requestRefresh = function () {
-        this._needsRefresh = true; delete $gameTemp.statusCache;
+        this._needsRefresh = true;
+        delete $gameTemp.statusCache;
+        delete $gameTemp.bookCache;
     }
     let SMgoto = SceneManager.goto;
     SceneManager.goto = function (sceneClass) {
-        if (sceneClass === Scene_Map) delete $gameTemp.statusCache;
+        if (sceneClass === Scene_Map) {
+            delete $gameTemp.statusCache;
+            delete $gameTemp.bookCache;
+        }
         return SMgoto.call(SceneManager, sceneClass);
-    } // 关闭菜单栏回到地图时，清空状态栏缓存，因为可能进行了整队操作
+    } // 关闭菜单栏回到地图时，清空状态栏和手册缓存，因为可能进行了整队操作
+    // 5.1 状态栏
     Game_Party.prototype.statusBar = function () {
         let s = $gameTemp.statusCache; // 优先读取缓存（地图名称除外）
         if (s == null) {
@@ -555,6 +564,39 @@
         if ($dataMap != null) s = $dataMap.displayName + '\n' + s;
         return s;
     }
+    // 5.2 怪物手册
+    let drawIcon = Window_Base.prototype.drawIcon;
+    Window_Base.prototype.drawIcon = function (iconIndex, x, y) { // 绘制怪物图标
+        if (typeof iconIndex === 'number') return drawIcon.apply(this, arguments);
+        const maxCol = 1; // 每行多少个
+        const bitmap = ImageManager.loadSystem("EnemyBook");
+        const pw = ImageManager.iconWidth;
+        const ph = ImageManager.iconHeight;
+        const sx = (iconIndex % maxCol) * pw;
+        const sy = Math.floor(iconIndex / maxCol) * ph;
+        this.contents.blt(bitmap, sx, sy, pw, ph, x, y);
+    };
+    Game_Party.prototype.enemyBook = function () {
+        let ids = [], s = $gameTemp.bookCache;
+        if (s != null) return s; else s = '';
+        for (let ev of $gameMap.events())
+            if (ev._damageInfo != null)
+                ids = ids.concat(ev._damageInfo.troop);
+        ids = ids.filter((id, i, a) => a.indexOf(id) === i).slice(0, 9); // 最多同时显示多少种怪物
+        for (let id of ids) {
+            let e = DataManager.getEnemyInfo(id), d = this.getDamageInfo(id);
+            s += '\n\\I[_%1]%2，%3：%4，%5：%6，%7：%8，\\G：%9，%10：%11\n\u3000%12：%13，%14：%15，%16：%17'.format(
+                e.id - 1, e.name, // 图标，名称
+                TextManager.hpA, e.hp, TextManager.param(2), e.atk, TextManager.param(3), e.def, // 生命，攻击，防御
+                e.gold, TextManager.expA, e.exp, // 金币，经验
+                '特殊', e.specialWords.join('、') || '无',
+                '回合', d.turn,
+                '伤害', _big(d.damage)
+            );
+        }
+        return $gameTemp.bookCache = s.substring(1);
+    }
+    // 5.3 地图显伤
     let GErefresh = Game_Event.prototype.refresh;
     Game_Event.prototype.refresh = function () {
         GErefresh.apply(this, arguments);
@@ -587,7 +629,10 @@
                 this.addChild(this._damage);
             } else
                 b = this._damage.bitmap;
-            b.clear(); b.textColor = 'white';
+            b.clear();
+            // 状态栏和手册都开启时才显伤
+            if (!($gameSwitches.value(1) && $gameSwitches.value(2))) return;
+            b.textColor = 'white';
             b.drawText(_big(ev._damageInfo.turn), 0, 0, w, b.fontSize);
             b.textColor = ev._damageInfo.color;
             b.drawText(_big(Math.abs(ev._damageInfo.damage)), 0, b.fontSize, w, b.fontSize);

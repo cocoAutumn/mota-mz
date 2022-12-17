@@ -4,7 +4,7 @@
 
 /*:
  * @target MZ
- * @plugindesc Displays text as a picture.
+ * @plugindesc 显示图片化文本，相当于H5样板的core.ui.textImage()
  * @author Yoji Ojima
  *
  * @help TextPicture.js

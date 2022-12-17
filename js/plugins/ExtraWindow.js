@@ -8,7 +8,7 @@
 
 /*:
  * @target MZ
- * @plugindesc 在指定场景（Scene）实时显示额外窗口的官方插件，魔塔状态栏必备
+ * @plugindesc 在指定场景（Scene）实时显示额外窗口，魔塔状态栏和怪物手册必备
  * @author triacontane
  * @base PluginCommonBase
  * @orderAfter PluginCommonBase
