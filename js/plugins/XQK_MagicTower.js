@@ -176,7 +176,7 @@
  * 5. 状态栏、怪物手册、地图显伤：
  * 状态栏和怪物手册需要启用官方插件ExtraWindow.js，在其中创建两个新的结构参数。
  * 状态栏的结构参数中Target Scene选择Scene_Map，填写左上角坐标和宽高，
- * 行距建议不小于32以便于\I[]图标绘制，文本内容必须为
+ * 行距建议不小于30以便于\I[]图标绘制，文本内容必须为
  * \js<$gameParty.statusBar()>（这个语法依赖TextScriptBase.js）
  * 该函数每秒会被调用60次因此进行了缓存，一般会和地图上的事件页同步刷新
  * （即变量/开关/独立开关/道具数量/队伍人员变化时），如需手动刷新请使用
@@ -516,7 +516,7 @@
     // 5. 状态栏、怪物手册、地图显伤，前两者需要用到官方插件ExtraWindow.js
     let _big = function (n, long) { // 大数字格式化，long为true会保留5~8位有效数字，否则2~5位
         if (!Number.isFinite(n)) return '???';
-        const a = long ? [9007e12, 1e12, 1e8] : [1e13, 1e9, 1e6];
+        const a = long ? [9007e12, 1e12, 1e8] : [1e13, 1e9, 1e5];
         let s = n < 0 ? '-' : '';
         n = Math.abs(n);
         if (n >= a[0]) s += Math.round(n / 1e12) + 'z';
@@ -579,22 +579,37 @@
     Game_Party.prototype.enemyBook = function () {
         let ids = [], s = $gameTemp.bookCache;
         if (s != null) return s; else s = '';
-        for (let ev of $gameMap.events())
-            if (ev._damageInfo != null)
-                ids = ids.concat(ev._damageInfo.troop);
+        for (let ev of $gameMap.events()) if (ev._damageInfo != null) ids = ids.concat(ev._damageInfo.troop);
         ids = ids.filter((id, i, a) => a.indexOf(id) === i).slice(0, 9); // 最多同时显示多少种怪物
         for (let id of ids) {
-            let e = DataManager.getEnemyInfo(id), d = this.getDamageInfo(id);
-            s += '\n\\I[_%1]%2，%3：%4，%5：%6，%7：%8，\\G：%9，%10：%11\n\u3000%12：%13，%14：%15，%16：%17'.format(
+            let e = DataManager.getEnemyInfo(id), d = this.getDamageInfo(id), c = '\\C[_FFD700]';
+            if (d.damage <= 0) c = '\\C[_00FF00]';
+            else if (d.damage >= Math.min.apply(
+                Math, $gameParty.allBattleMembers().map(a => a._hp + a.mdf)
+            )) c = '\\C[_FF0000]';
+            s += '\n\\I[_%1]%2，%3：%4，%5：%6，%7：%8，%9：%10\n\u3000\\G：%11，%12：%13，%14：%15，%16：%17'.format(
                 e.id - 1, e.name, // 图标，名称
-                TextManager.hpA, e.hp, TextManager.param(2), e.atk, TextManager.param(3), e.def, // 生命，攻击，防御
-                e.gold, TextManager.expA, e.exp, // 金币，经验
+                TextManager.hpA, _big(e.hp),
+                TextManager.param(2), _big(e.atk),
+                TextManager.param(3), _big(e.def), // 生命，攻击，防御
+                '回合', _big(d.turn),
+                _big(e.gold), TextManager.expA, _big(e.exp), // 金币，经验
                 '特殊', e.specialWords.join('、') || '无',
-                '回合', d.turn,
-                '伤害', _big(d.damage)
+                '伤害', c + _big(d.damage) + '\\C[0]'
             );
         }
         return $gameTemp.bookCache = s.substring(1);
+    }
+    // 角色窗口平时会被怪物手册遮挡，所以「技能、装备、状态、整队」需要隐藏怪物手册
+    let commandPersonal = Scene_Menu.prototype.commandPersonal;
+    Scene_Menu.prototype.commandPersonal = function () {
+        (this._extraWindows ?? []).forEach(w => w.hide());
+        return commandPersonal.apply(this, arguments);
+    }
+    let commandFormation = Scene_Menu.prototype.commandFormation;
+    Scene_Menu.prototype.commandFormation = function () {
+        (this._extraWindows ?? []).forEach(w => w.hide());
+        return commandFormation.apply(this, arguments);
     }
     // 5.3 地图显伤
     let GErefresh = Game_Event.prototype.refresh;
@@ -623,8 +638,10 @@
         if (this.visible && ev instanceof Game_Event && ev._damageInfo != null) {
             if (this._damage == null) {
                 this._damage = new Sprite(b = new Bitmap(w, h));
-                b.fontSize = Math.ceil(h / 3);
-                b.fontFace = 'Consolas'; b.outlineColor = 'black';
+                b.fontSize = Math.ceil(h / 3); // 字号
+                b.fontFace = 'Consolas'; // 字体
+                b.outlineColor = 'black'; // 描边颜色
+                // b.outlineWidth = 3; // 描边宽度
                 this._damage.position.set(-w / 2, -h * 2 / 3);
                 this.addChild(this._damage);
             } else

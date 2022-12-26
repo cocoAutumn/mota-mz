@@ -41,25 +41,6 @@
     Scene_Menu.prototype.commandGameEnd = () => SceneManager.push(Scene_Load); // 重要！重启改成读档
     Scene_Menu.prototype.createGoldWindow = function () { }; // 菜单栏不显示金币
 
-    // 角色窗口平时不显示，为怪物手册预留空间，需要显示时则同时隐藏怪物手册
-    let createStatusWindow = Scene_Menu.prototype.createStatusWindow;
-    Scene_Menu.prototype.createStatusWindow = function () {
-        createStatusWindow.apply(this, arguments);
-        this._statusWindow.hide();
-    }
-    let commandPersonal = Scene_Menu.prototype.commandPersonal;
-    Scene_Menu.prototype.commandPersonal = function () {
-        (this._extraWindows ?? []).forEach(w => w.hide());
-        this._statusWindow.show();
-        return commandPersonal.apply(this, arguments);
-    }
-    let commandFormation = Scene_Menu.prototype.commandFormation;
-    Scene_Menu.prototype.commandFormation = function () {
-        (this._extraWindows ?? []).forEach(w => w.hide());
-        this._statusWindow.show();
-        return commandFormation.apply(this, arguments);
-    }
-
     Scene_MenuBase.prototype.commandWindowHeight = function () {
         return this.calcWindowHeight(1, true);
     }
@@ -85,10 +66,9 @@
     Window_MenuStatus.prototype.numVisibleRows = () => 2;
     Window_MenuStatus.prototype.drawItemImage = function (index) {
         const actor = this.actor(index), rect = this.itemRectWithPadding(index),
-            w = Math.min(rect.width, 144), h = Math.min(rect.height, 144),
-            lineHeight = this.lineHeight();
+            w = Math.min(rect.width, 144), h = Math.min(rect.height, 144);
         this.changePaintOpacity(actor.isBattleMember());
-        // this.drawActorFace(actor, rect.x, rect.y + lineHeight * 2, w, h);
+        this.drawActorFace(actor, rect.x, rect.y + 31, w, h); // 防止被文字遮挡
         this.changePaintOpacity(true);
     }
     Window_MenuStatus.prototype.drawItemStatus = function (index) {
@@ -96,8 +76,8 @@
             x = rect.x, y = rect.y, width = rect.width, bottom = y + rect.height,
             lineHeight = this.lineHeight();
         this.drawActorName(actor, x, y + lineHeight * 0, width);
-        this.drawActorLevel(actor, x, y + lineHeight * 1, width);
-        this.drawActorClass(actor, x, bottom - lineHeight * 4, width);
+        // this.drawActorLevel(actor, x, y + lineHeight * 1, width);
+        // this.drawActorClass(actor, x, bottom - lineHeight * 4, width);
         this.placeBasicGauges(actor, x, bottom - lineHeight * 3, width);
         this.drawActorIcons(actor, x, bottom - lineHeight * 1, width);
     }

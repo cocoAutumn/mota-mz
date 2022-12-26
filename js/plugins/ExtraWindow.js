@@ -282,6 +282,7 @@
         this._extraWindows.forEach(extraWindow => {
             if (this._windowLayer) {
                 this.addWindow(extraWindow);
+                if (this instanceof Scene_Map) this._windowLayer.setChildIndex(extraWindow, 0); // 画在最底层
             } else {
                 this.addChild(extraWindow);
             }
