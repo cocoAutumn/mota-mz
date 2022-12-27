@@ -1,6 +1,6 @@
 [
 null,
-{"id":1,"actions":[],"battlerHue":0,"battlerName":"greenSlime","dropItems":[],"exp":1,"traits":[],"gold":1,"name":"绿头怪","note":"","params":[50,0,20,1,0,0,0,0]},
+{"id":1,"actions":[],"battlerHue":0,"battlerName":"greenSlime","dropItems":[],"exp":1,"traits":[{"code":11,"dataId":23,"value":1}],"gold":1,"name":"绿头怪","note":"","params":[50,0,20,1,0,0,0,0]},
 {"id":2,"actions":[],"battlerHue":0,"battlerName":"redSlime","dropItems":[],"exp":2,"traits":[],"gold":2,"name":"红头怪","note":"","params":[70,0,15,2,0,0,0,0]},
 {"id":3,"actions":[],"battlerHue":0,"battlerName":"blackSlime","dropItems":[],"exp":5,"traits":[],"gold":5,"name":"青头怪","note":"","params":[200,0,35,10,0,0,0,0]},
 {"id":4,"actions":[],"battlerHue":0,"battlerName":"kingSlime","dropItems":[],"exp":30,"traits":[],"gold":32,"name":"怪王","note":"","params":[700,0,250,125,0,0,0,0]},

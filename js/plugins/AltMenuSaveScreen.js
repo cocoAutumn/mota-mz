@@ -19,7 +19,7 @@
  * @type number
  * @default 4
  * @min 1
- * @max 4
+ * @max 10
  * 
  * @param maxCols
  * @text 档案页最大列数
@@ -27,7 +27,7 @@
  * @type number
  * @default 8
  * @min 1
- * @max 8
+ * @max 10
  *
  * @help AltSaveScreen.js
  * This plugin changes the layout of the menu and save/load screen.

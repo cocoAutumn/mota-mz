@@ -3,6 +3,28 @@
  * @plugindesc 魔塔样板核心，含有一些全局参数可供修改
  * @author 小秋葵
  *
+ * @param flyMaxRows
+ * @text 物品选择/楼传界面行数
+ * @type number
+ * @default 8
+ * @min 1
+ * @max 10
+ *
+ * @param flyMaxCols
+ * @text 物品选择/楼传界面列数
+ * @type number
+ * @default 5
+ * @min 1
+ * @max 10
+ *
+ * @param flyColSpacing
+ * @text 物品选择/楼传界面列距
+ * @desc 相邻两列的水平间隔像素数
+ * @type number
+ * @default 4
+ * @min 0
+ * @max 20
+ *
  * @param maxTurn
  * @text 精确回合数上限
  * @desc 回合数大于此值时，怪物每回合伤害视为等差数列用公式求和，
@@ -726,5 +748,77 @@
                     }
                 }
         }
+    }
+
+    // 8. 楼层传送器：用「物品选择处理」指令魔改得到，
+    Game_Interpreter.prototype.setupItemChoice = function (params) {
+        return $gameMessage.setItemChoice.apply($gameMessage, params);
+    };
+    Scene_Message.prototype.eventItemWindowRect = function () {
+        const wx = 0, wy = 0, ww = Graphics.boxWidth,
+            wh = this.calcWindowHeight(_args.flyMaxRows, true);
+        return new Rectangle(wx, wy, ww, wh);
+    };
+    Window_EventItem.prototype.maxCols = () => _args.flyMaxCols;
+    Window_EventItem.prototype.colSpacing = () => _args.flyColSpacing;
+    let WEmakeItemList = Window_EventItem.prototype.makeItemList,
+        WEplaceCancelButton = Window_EventItem.prototype.placeCancelButton,
+        WEincludes = Window_EventItem.prototype.includes,
+        WEneedsNumber = Window_EventItem.prototype.needsNumber,
+        WEdrawItem = Window_EventItem.prototype.drawItem;
+    Window_EventItem.prototype.makeItemList = function () {
+        if ($gameMessage.itemChoiceItypeId() > 0)
+            WEmakeItemList.apply(this, arguments);
+        else
+            this._data = $dataMapInfos.filter(map => map && this.includes(map));
+    };
+    Window_EventItem.prototype.placeCancelButton = function () {
+        WEplaceCancelButton.apply(this, arguments);
+        if (this._cancelButton) this._cancelButton.x = 0;
+    };
+    Window_EventItem.prototype.includes = function (item) {
+        if ($gameMessage.itemChoiceItypeId() > 0)
+            return WEincludes.apply(this, arguments);
+        let i = $dataMap.name.indexOf(_delimiter);
+        return item.name.startsWith($dataMap.name.substring(0, i)) &&
+            ($gameSystem._visited ?? [])[item.id];
+    };
+    Window_EventItem.prototype.needsNumber = function () {
+        return $gameMessage.itemChoiceItypeId() > 0 &&
+            WEneedsNumber.apply(this, arguments);
+    };
+    Window_EventItem.prototype.isEnabled = function (map) {
+        return $gameMessage.itemChoiceItypeId() > 0 || map?.meta?.noFlyTo !== true;
+    };
+    Window_EventItem.prototype.drawItem = function (index) {
+        if ($gameMessage.itemChoiceItypeId() > 0)
+            return WEdrawItem.apply(this, arguments);
+        const map = this.itemAt(index);
+        if (map) {
+            const r = this.itemLineRect(index);
+            this.changePaintOpacity(this.isEnabled(map));
+            this.drawText(map.displayName, r.x, r.y, r.width);
+            this.changePaintOpacity(1);
+        }
+    };
+    Game_Interpreter.prototype.useFly = function () {
+        if ($dataMap.name.indexOf(_delimiter) < 0 || $dataMap.meta.noFlyFrom)
+            return $gameMessage.drawTip('当前地图禁止传送！');
+        this.command104([1]);
+        $gameMessage.add('请选择你要传送到的地图：');
+        return true;
+    }
+    Game_Player.prototype.flyTo = function (mapId) {
+        let toMap = $dataMapInfos[mapId];
+        if (toMap == null) return false;
+        let from = $dataMap.name, to = toMap.name;
+        from = from.substring(from.indexOf(_delimiter) + _delimiter.length);
+        to = to.substring(to.indexOf(_delimiter) + _delimiter.length);
+        let stair = '下';
+        if (+from > +to || $dataMap.id === mapId && +from < 0) stair = '上';
+        let loc = /^\[-?\d+,-?\d+\]$/.test(toMap.meta[stair]) ?
+            eval(toMap.meta[stair]) : [this._x, this._y];
+        this.changeFloor(toMap.name + '[' + loc[0] + ',' + loc[1] + ']', true);
+        return true;
     }
 })()
