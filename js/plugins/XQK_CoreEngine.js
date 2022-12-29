@@ -27,18 +27,18 @@
  * 事实上修改它可以影响「名字输入处理」指令用到的几页字符。
  * 比如修改为'ru'会使用一页俄文西里尔字母，'ja'为两页假名和一页全角英数。
  * 本插件将两页假名中的最后十几个进行了优化（提供了中文数字等）并将那页
- * 全角英数改成了半角ASCII字符。
+ * 全角英数改成了半角ASCII字符然后调到了第一页。
  *
  * 6. 增强「数字输入处理」指令：
- * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max]);
+ * 现在你可以使用$gameMap._interpreter.command103([id,digits,min,max])
  * 来扩大输入范围了，此处digits（位数）可以大于8，而min和max表示每个字符的
  * 最小值和最大值（不填则默认'0'到'9'，一般可以填'A'到'Z'或'a'到'z'）。例如
- * $gameMap._interpreter.command103([1,10,'a','z']);
+ * $gameMap._interpreter.command103([1,10,'a','z'])
  * 要求玩家输入一个长度为10的小写单词，保存在1号变量中。
  *
  * 7. 提供「左上角临时提示」功能：
  * 还记得每次切换地图时左上角一闪而过的地图名称吗？现在你可以用那个横幅显示
- * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数);
+ * 任意文字了，只要使用$gameMessage.drawTip('一句话',秒数)
  * 且这句话和「显示文字」等指令一样支持\V[n]等转义序列！
  *
  * 8. 启动时加载所有地图到$dataMapInfos：（重要）
@@ -98,8 +98,19 @@
         }
     };
 
-    // 5. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII
+    // 5. 增强「名字输入处理」指令，日语locale的第三页改为半角ASCII并调到第一页
     Window_NameInput.JAPAN1 = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        '~', '!', '@', '#', '$', '%', '^', '&', '(', ')',
+        ':', ';', '<', '=', '>', '?', '[', ']', '{', '}',
+        '+', '-', '×', '÷', 'A', 'B', 'C', 'D', 'E', 'F',
+        'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+        'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+        'u', 'v', 'w', 'x', 'y', 'z', '|', ' ', 'かな', '決定'
+    ];
+    Window_NameInput.JAPAN2 = [
         "あ", "い", "う", "え", "お", "が", "ぎ", "ぐ", "げ", "ご",
         "か", "き", "く", "け", "こ", "ざ", "じ", "ず", "ぜ", "ぞ",
         "さ", "し", "す", "せ", "そ", "だ", "ぢ", "づ", "で", "ど",
@@ -110,7 +121,7 @@
         "や", "ゆ", "よ", "わ", "ん", "零", "一", "二", "三", "四",
         "ら", "り", "る", "れ", "ろ", "を", "・", "　", "カナ", "決定"
     ];
-    Window_NameInput.JAPAN2 = [
+    Window_NameInput.JAPAN3 = [
         "ア", "イ", "ウ", "エ", "オ", "ガ", "ギ", "グ", "ゲ", "ゴ",
         "カ", "キ", "ク", "ケ", "コ", "ザ", "ジ", "ズ", "ゼ", "ゾ",
         "サ", "シ", "ス", "セ", "ソ", "ダ", "ヂ", "ヅ", "デ", "ド",
@@ -120,17 +131,6 @@
         "マ", "ミ", "ム", "メ", "モ", "ッ", "ャ", "ュ", "ョ", "ヮ",
         "ヤ", "ユ", "ヨ", "ワ", "ン", "五", "六", "七", "八", "九",
         "ラ", "リ", "ル", "レ", "ロ", "ヲ", "ー", "　", "英数", "決定"
-    ];
-    Window_NameInput.JAPAN3 = [
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '~', '!', '@', '#', '$', '%', '^', '&', '(', ')',
-        ':', ';', '<', '=', '>', '?', '[', ']', '{', '}',
-        '+', '-', '×', '÷', 'A', 'B', 'C', 'D', 'E', 'F',
-        'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-        'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-        'u', 'v', 'w', 'x', 'y', 'z', '|', ' ', 'かな', '決定'
     ];
 
     // 6. 增强「数字输入处理」指令，支持任意可见ASCII字符
@@ -167,7 +167,7 @@
     var processOk = Window_NumberInput.prototype.processOk;
     Window_NumberInput.prototype.processOk = function () {
         this._number = String.fromCodePoint(...this._number);
-        if (this._min === 48 && this._max === 57)
+        if (this._min === 48 && this._max === 57) // 是否需要转换成数字
             this._number = (+this._number).clamp(0, Number.MAX_SAFE_INTEGER);
         processOk.apply(this, arguments);
     };
@@ -176,7 +176,7 @@
     Game_Message.prototype.drawTip = function (text, time = 2) {
         if (typeof text === 'string' && SceneManager._scene instanceof Scene_Map) {
             const w = SceneManager._scene._mapNameWindow;
-            w._showCount = time * 60;
+            w._showCount = time * 60; // 一秒等于六十帧
             w.refresh(w.convertEscapeCharacters(text));
         }
     };

@@ -132,6 +132,14 @@
  * 使用时需要依赖官方插件PluginCommonBase.js、TextScriptBase.js、
  * ExtraWindow.js以及我的另一个插件XQK_CoreEngine.js。
  *
+ * 0. 地图事件的spawn机制：
+ * 魔塔的特点之一是绝大部分事件需要量产，门、怪物、道具...甚至可破的墙。
+ * 如果采用复制粘贴的方式，那么后续就难以统一修改行走图、优先级、触发条件等。
+ * 因此本样板提供了spawn机制，只要你在地图备注中填写<template:n>
+ * （n为某个样板层的地图编号），那么这张地图就会根据每个点的「区域ID」
+ * （左侧调色板的R页面，范围为0~255）自动从样板层复制相同ID的事件。
+ * 常用于制作「可破的墙」等大批量事件。
+ *
  * 1. 角色属性系统（含衰弱）：
  * RPG Maker的默认行为是，双上限、双攻双防、敏捷幸运，这八项属性的基础值
  * 只受职业和等级影响，而通过补药或事件永久增减这些值则是另一回事。
@@ -210,8 +218,8 @@
  * 显示内容是\js<$gameParty.enemyBook()>，但是该内容中的\\I[_n]图标绘制
  * 要求将一张EnemyBook.png放在img/system文件夹，此图片形似H5样板的
  * terrains.png，也就是宽32的竖长条。
- * 地图显伤在两个开关同时开启时，会显示在「怪物所在格子」的左下角，
- * 第一行是回合数，第二行是伤害。负伤会显示为绿色但「不带负号！」（否则写不下6位）
+ * 地图显伤在两个开关同时开启时，会显示在「怪物所在格子」的左下角，第一行是
+ * 回合数，第二行是伤害。负伤会显示为绿色但「不带负号！」（否则写不下6位）
  *
  * 6. 魔塔的楼层切换：
  * 在事件页中备注<stair:name[x,y,d,f]>就可以调用公共事件来切换楼层，
@@ -229,13 +237,20 @@
  * 【关于穿透性】尽量不要对任何「可通行事件」设置「仅确定键触发」，否则鼠标
  * 和触屏没法停在上面而不触发！详情请查阅样板帮助文档。
  *
- * 7. spawn机制：
- * 魔塔的特点之一是绝大部分事件需要量产，门、怪物、道具...甚至墙。
- * 如果采用复制粘贴的方式，那么后续就难以统一修改行走图、优先级、触发条件等。
- * 因此本样板提供了spawn机制，只要你在地图备注中填写<template:n>
- * （n为某个样板层的地图编号），那么这张地图就会根据每个点的「区域ID」
- * （左侧调色板的R页面，范围为0~255）自动从样板层复制相同ID的事件。
- * 常用于制作「可破的墙」等大批量事件。
+ * 7. 魔塔的楼层传送器：
+ * 用「物品选择处理」指令魔改得到，右侧参数中可以更改该界面的行列数和列间距。
+ * 物品选择处理指令的API是$gameMap._interpreter.command104([id,type])
+ * 其中id表示选好以后的物品编号保存在几号变量，type表示要选择的物品类型，
+ * type为1~4分别表示「普通物品、重要物品、隐藏物品A、隐藏物品B」，如果不填
+ * type就会进入楼传界面。
+ * 公共事件「楼层传送器」会先检测当前地图的名称是否含有前述的「定界符」，
+ * 如果含有并且地图备注中没有<noFlyFrom>项则认为在当前地图允许使用传送器。
+ * 楼传界面默认会显示「同一区域（定界符左侧前缀相同）内到过的所有地图」，
+ * 但若某张地图的备注中有<noFlyTo>则会认为禁止被飞到，显示为无法选中的灰色。
+ * 「已到达」是在公共事件_sys_changeFloor中标记的，请注意。
+ * 传送到的目标点默认是地图备注中的下楼点<下:[x,y]>，但是如果当前和目标地图的
+ * 定界符右侧都是数字，且目标地图的数字较小（或者负数楼层同层传送），则会传送到
+ * 上楼点<上:[x,y]>。
  */
 (() => {
     const _args = PluginManager.parameters('XQK_MagicTower');
@@ -254,6 +269,26 @@
 
     let _isArray = function (s) { // 为eval做准备
         return Array.isArray(s) || typeof s === 'string' && s[0] === '[' && s.at(-1) === ']';
+    }
+
+    // 0. 地图事件的spawn机制：根据各点的区域编码从样板层量产事件
+    let onDatabaseLoaded = Scene_Boot.prototype.onDatabaseLoaded;
+    Scene_Boot.prototype.onDatabaseLoaded = function () {
+        onDatabaseLoaded.apply(this, arguments);
+        for (const map of $dataMapInfos) {
+            if (map == null || $dataMapInfos[map.meta.template] == null) continue;
+            let src = $dataMapInfos[map.meta.template].events,
+                i = map.events.length, w = map.width, h = map.height;
+            for (let y = 0; y < h; ++y) for (let x = 0; x < w; ++x) {
+                let id = map.data[(5 * h + y) * w + x]; // 六等分的最后一段
+                if (id > 0 && src[id] != null) {
+                    map.events[i] = Object.assign(
+                        JSON.parse(JSON.stringify(src[id])), { 'id': i, 'x': x, 'y': y }
+                    );
+                    ++i;
+                }
+            }
+        }
     }
 
     // 1. 角色属性系统（含衰弱）
@@ -529,7 +564,7 @@
                     a._paramPlus[i] -= degenerate[i];
             a.changeExp(a.currentExp() + o.exp);
         }
-        this.gainGold(o.gold); // 全队获得金币
+        this.gainGold(o.gold); // 全队获得金币（幸运金币请自行实现）
         $gameMessage.drawTip('战斗胜利，获得' + o.gold + '\\G，' + o.exp + TextManager.expA);
         $gameTemp._undead = o.special.includes(23) && o.troop.length === 1; // 重生
         // 可以在「公共事件：_sys_battle」中进行怪物消失前的自定义处理
@@ -678,7 +713,7 @@
         }
     }
 
-    // 6. 楼层切换和传送器
+    // 6. 魔塔的楼层切换
     const _delimiter = '：'; // 地图名称定界符，要求长度为1且不是字母、数字、减号
     if (_delimiter.length !== 1 || /^[-A-Za-z0-9]$/.test(_delimiter))
         alert('地图名称定界符' + _delimiter + '不能为字母、数字、减号，且长度必须为1！');
@@ -707,50 +742,27 @@
         $gameVariables.setValue(2, a[0]);
         $gameVariables.setValue(3, a[1]); // 目标地图ID和坐标
         if ([2, 4, 6, 8].includes(a[2])) this._newDirection = a[2]; // 传送后朝向，0不变，2468下左右上
-        if (a.length === 4) this._fadeType = a[3]; // 传送特效，0黑屏，1白屏，其他无淡出
+        if (a.length >= 4) this._fadeType = a[3]; // 0黑屏，1白屏，其他值为无淡出，不填则与上一次相同
         // 可以在这里根据name、toName、isFly播放不同声效
         return true;
     }
     // 复写事件指令，使用变量指定目标点时，朝向和淡入淡出的 0 用脚本覆盖
-    Game_Interpreter.prototype.command201 = function (params) {
+    Game_Interpreter.prototype.command201 = function (a) {
         if ($gameParty.inBattle() || $gameMessage.isBusy()) return false;
         let mapId, x, y, d, f;
-        if (params[0] === 0) {
-            mapId = params[1]; x = params[2]; y = params[3]; d = params[4]; f = params[5];
-        } else {
-            mapId = $gameVariables.value(params[1]);
-            x = $gameVariables.value(params[2]);
-            y = $gameVariables.value(params[3]);
-            d = params[4] || $gamePlayer._newDirection;
-            f = params[5] || $gamePlayer._fadeType;
+        if (a[0] === 0) { mapId = a[1]; x = a[2]; y = a[3]; d = a[4]; f = a[5]; } else {
+            mapId = $gameVariables.value(a[1]);
+            x = $gameVariables.value(a[2]);
+            y = $gameVariables.value(a[3]);
+            d = a[4] || $gamePlayer._newDirection;
+            f = a[5] || $gamePlayer._fadeType;
         }
         $gamePlayer.reserveTransfer(mapId, x, y, d, f);
         this.setWaitMode("transfer");
         return true;
     }
 
-    // 7. spawn机制：根据各点的区域编码从样板层量产事件
-    let onDatabaseLoaded = Scene_Boot.prototype.onDatabaseLoaded;
-    Scene_Boot.prototype.onDatabaseLoaded = function () {
-        onDatabaseLoaded.apply(this, arguments);
-        for (const map of $dataMapInfos) {
-            if (map == null || $dataMapInfos[map.meta.template] == null) continue;
-            let src = $dataMapInfos[map.meta.template].events,
-                i = map.events.length, w = map.width, h = map.height;
-            for (let y = 0; y < h; ++y)
-                for (let x = 0; x < w; ++x) {
-                    let id = map.data[(5 * h + y) * w + x]; // 六等分的最后一段
-                    if (id > 0 && src[id] != null) {
-                        map.events[i] = Object.assign(
-                            JSON.parse(JSON.stringify(src[id])), { 'id': i, 'x': x, 'y': y }
-                        );
-                        ++i;
-                    }
-                }
-        }
-    }
-
-    // 8. 楼层传送器：用「物品选择处理」指令魔改得到，
+    // 7. 魔塔的楼层传送器：用「物品选择处理」指令魔改得到
     Game_Interpreter.prototype.setupItemChoice = function (params) {
         return $gameMessage.setItemChoice.apply($gameMessage, params);
     };
@@ -767,32 +779,27 @@
         WEneedsNumber = Window_EventItem.prototype.needsNumber,
         WEdrawItem = Window_EventItem.prototype.drawItem;
     Window_EventItem.prototype.makeItemList = function () {
-        if ($gameMessage.itemChoiceItypeId() > 0)
-            WEmakeItemList.apply(this, arguments);
-        else
-            this._data = $dataMapInfos.filter(map => map && this.includes(map));
+        if ($gameMessage.itemChoiceItypeId() > 0) WEmakeItemList.apply(this, arguments);
+        else this._data = $dataMapInfos.filter(map => map && this.includes(map));
     };
     Window_EventItem.prototype.placeCancelButton = function () {
         WEplaceCancelButton.apply(this, arguments);
         if (this._cancelButton) this._cancelButton.x = 0;
     };
     Window_EventItem.prototype.includes = function (item) {
-        if ($gameMessage.itemChoiceItypeId() > 0)
-            return WEincludes.apply(this, arguments);
+        if ($gameMessage.itemChoiceItypeId() > 0) return WEincludes.apply(this, arguments);
         let i = $dataMap.name.indexOf(_delimiter);
         return item.name.startsWith($dataMap.name.substring(0, i)) &&
             ($gameSystem._visited ?? [])[item.id];
     };
     Window_EventItem.prototype.needsNumber = function () {
-        return $gameMessage.itemChoiceItypeId() > 0 &&
-            WEneedsNumber.apply(this, arguments);
+        return $gameMessage.itemChoiceItypeId() > 0 && WEneedsNumber.apply(this, arguments);
     };
     Window_EventItem.prototype.isEnabled = function (map) {
         return $gameMessage.itemChoiceItypeId() > 0 || map?.meta?.noFlyTo !== true;
     };
     Window_EventItem.prototype.drawItem = function (index) {
-        if ($gameMessage.itemChoiceItypeId() > 0)
-            return WEdrawItem.apply(this, arguments);
+        if ($gameMessage.itemChoiceItypeId() > 0) return WEdrawItem.apply(this, arguments);
         const map = this.itemAt(index);
         if (map) {
             const r = this.itemLineRect(index);
@@ -809,9 +816,8 @@
         return true;
     }
     Game_Player.prototype.flyTo = function (mapId) {
-        let toMap = $dataMapInfos[mapId];
+        let toMap = $dataMapInfos[mapId], from = $dataMap.name, to = toMap?.name;
         if (toMap == null) return false;
-        let from = $dataMap.name, to = toMap.name;
         from = from.substring(from.indexOf(_delimiter) + _delimiter.length);
         to = to.substring(to.indexOf(_delimiter) + _delimiter.length);
         let stair = '下';
